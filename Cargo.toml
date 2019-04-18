@@ -1,0 +1,9 @@
+[package]
+name = "msc-jit"
+version = "0.1.0"
+authors = ["jam1garner <jam1.mcleod@hotmail.com>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2.51"
+msc = "^0.5"
