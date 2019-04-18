@@ -1,3 +1,5 @@
 rust-x86asm
+*.c
+*.mscsb
 /target
 **/*.rs.bk

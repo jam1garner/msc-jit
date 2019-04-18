@@ -12,7 +12,27 @@ fn cmd_to_binop(c: Cmd) -> BinOp {
         Cmd::MultI => BinOp::Mult(Type::Int),
         Cmd::DivI => BinOp::Div(Type::Int),
         Cmd::ModI => BinOp::Mod,
+        Cmd::AndI => BinOp::BitAnd,
+        Cmd::OrI => BinOp::BitOr,
+        Cmd::XorI => BinOp::BitXor,
+        Cmd::ShiftL => BinOp::ShiftL,
+        Cmd::ShiftR => BinOp::ShiftR,
+        Cmd::AddF => BinOp::Add(Type::Float),
+        Cmd::SubF => BinOp::Sub(Type::Float),
+        Cmd::MultF => BinOp::Mult(Type::Float),
+        Cmd::DivF => BinOp::Div(Type::Float),
         _ => panic!("{:?} not valid BinOp", c)
+    }
+}
+
+fn binop_cmd_type(c: Cmd) -> Type {
+    match c {
+        Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI | Cmd::ModI |
+        Cmd::AndI | Cmd::OrI | Cmd::XorI | Cmd::ShiftL | Cmd::ShiftR
+            => Type::Int,
+        Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF
+            => Type::Float,
+        _ => panic!("Cmd {:?} has no type", c)
     }
 }
 
@@ -46,12 +66,14 @@ where
                             return Some(Node::Const{ val: Const::U32(val as u32) });
                         }
                     }
-                    Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI | Cmd::ModI => {
+                    Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI | Cmd::ModI |
+                    Cmd::AndI | Cmd::XorI | Cmd::ShiftL| Cmd::OrI  | Cmd::ShiftR |
+                    Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF => {
                         if c.push_bit {
                             return Some(Node::BinOp {
                                 op:    cmd_to_binop(c.cmd),
-                                right: Box::new(take_node(commands, Type::Int)?),
-                                left:  Box::new(take_node(commands, Type::Int)?),
+                                right: Box::new(take_node(commands, binop_cmd_type(c.cmd))?),
+                                left:  Box::new(take_node(commands, binop_cmd_type(c.cmd))?),
                             })
                         } 
                     }

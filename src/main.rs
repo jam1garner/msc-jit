@@ -7,7 +7,7 @@ use jit::ast::*;
 use jit::x86::*;
 
 fn main() {
-    let test = msc::MscsbFile::open("/home/jam/dev/msc/test.mscsb")
+    let test = msc::MscsbFile::open("/home/jam/dev/msc/msc-jit/test.mscsb")
                     .unwrap();
     
     println!("{:#?}", test.scripts[0].as_ast());
