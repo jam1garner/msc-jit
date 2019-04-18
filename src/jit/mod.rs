@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use std::mem;
 pub mod x86;
+pub mod ast;
 
 extern {
     fn memset(s: *mut libc::c_void, c: libc::uint32_t, n: libc::size_t) -> *mut libc::c_void;

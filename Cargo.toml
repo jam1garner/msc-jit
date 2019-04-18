@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2.51"
-msc = "0.5.1"
+msc = "0.5.2"
 x86asm = { path = "./rust-x86asm" } 
