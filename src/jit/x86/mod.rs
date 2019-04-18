@@ -1,9 +1,7 @@
 use super::JitMemory;
-use std::io::prelude::*;
-use msc::{MscsbFile, Script, Command, Cmd};
+use msc::{MscsbFile, Cmd};
 use std::io::Cursor;
-
-mod assembler;
+use x86asm::{Instruction, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 
 pub struct CompiledProgram {
     pub mem: Vec<JitMemory>,
@@ -18,27 +16,39 @@ impl Compilable for MscsbFile {
     fn compile(&self) -> CompiledProgram {
         let mut mem = JitMemory::new(1);
         let buffer = unsafe {mem.as_slice()};
-        let mut asm_buffer = Cursor::new(buffer);
+        let buffer = Cursor::new(buffer);
+        let mut writer = InstructionWriter::new(buffer, Mode::Long);
         
         let mut current_val: &Cmd = &Cmd::Nop;
         for command in self.scripts[0].commands.iter() {
+            if command.push_bit {
+                current_val = &command.cmd;
+            }
             match command.cmd {
-                Cmd::Begin { var_count, arg_count } => {
+                Cmd::Begin { var_count: _, arg_count: _ } => {
                     // TODO: literally all of this
-                }
-                Cmd::PushInt { val } => {
-                    current_val = &command.cmd;
-                }
-                Cmd::PushShort { val } => {
-                    current_val = &command.cmd;
                 }
                 Cmd::Return6 => {
                     match current_val {
                         Cmd::PushInt { val } => {
-                            asm_buffer.write(&[0xB8, (val & 0xFF) as u8, ((val & 0xFF00) >> 8) as u8, ((val & 0xFF0000) >> 0x10) as u8, ((val & 0xFF000000) >> 0x18) as u8]);
+                            writer.write(
+                                &Instruction::new2(
+                                    Mnemonic::MOV,
+                                    Operand::Direct(Reg::EAX),
+                                    Operand::Literal32(*val)
+                                )
+                            ).unwrap();
+                            // asm_buffer.write(&[0xB8, (val & 0xFF) as u8, ((val & 0xFF00) >> 8) as u8, ((val & 0xFF0000) >> 0x10) as u8, ((val & 0xFF000000) >> 0x18) as u8]);
                         }
                         Cmd::PushShort { val } => {
-                            asm_buffer.write(&[0xB8, (val & 0xFF) as u8, ((val & 0xFF00) >> 8) as u8, 0, 0]);
+                            writer.write(
+                                &Instruction::new2(
+                                    Mnemonic::MOV,
+                                    Operand::Direct(Reg::EAX),
+                                    Operand::Literal32(*val as u32)
+                                )
+                            ).unwrap();
+                            // asm_buffer.write(&[0xB8, (val & 0xFF) as u8, ((val & 0xFF00) >> 8) as u8, 0, 0]);
                         }
                         _ => {}
                     }
@@ -46,7 +56,7 @@ impl Compilable for MscsbFile {
                 Cmd::End => {
                     // TODO: all of this too
                 }
-                _ => { panic!("Opcode {:?} not support", command.cmd) }
+                _ => {}
             }
         }
 

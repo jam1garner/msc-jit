@@ -1,5 +1,6 @@
 extern crate msc;
 extern crate libc;
+extern crate x86asm;
 mod jit;
 
 use jit::x86::*;
