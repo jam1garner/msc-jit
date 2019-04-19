@@ -64,8 +64,6 @@ impl Compilable for MscsbFile {
     }
 }
 
-
-
 impl CompiledProgram {
     pub fn lock_all(&mut self) {
         for jit_mem in self.mem.iter_mut() {

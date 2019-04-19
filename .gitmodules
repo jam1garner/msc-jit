@@ -1,0 +1,3 @@
+[submodule "rust-x86asm"]
+	path = rust-x86asm
+	url = https://github.com/jam1garner/rust-x86asm

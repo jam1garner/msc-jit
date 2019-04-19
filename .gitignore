@@ -1,4 +1,3 @@
-rust-x86asm
 *.c
 *.mscsb
 /target

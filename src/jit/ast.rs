@@ -1,5 +1,4 @@
 use msc::{Command, Script, Cmd};
-use std::slice::Iter;
 
 pub trait AsAst {
     fn as_ast(&self) -> Vec<Node>;
@@ -75,12 +74,15 @@ where
                                 right: Box::new(take_node(commands, binop_cmd_type(c.cmd))?),
                                 left:  Box::new(take_node(commands, binop_cmd_type(c.cmd))?),
                             })
-                        } 
+                        }
                     }
                     Cmd::Return6 | Cmd::Return8 => {
                         return Some(Node::Return {
                             val: Some(Box::new(take_node(commands, None)?))
                         })
+                    }
+                    Cmd::Return7 | Cmd::Return9 => {
+                        return Some(Node::Return { val: None });
                     }
                     _ => {}
                 }
@@ -88,7 +90,6 @@ where
             _ => {}
         }
     }
-    None
 }
 
 impl AsAst for Script {
@@ -132,6 +133,7 @@ pub enum Node<'a> {
         op: AssignOp,
         is_global: bool,
         var_num: u32,
+        right: Box<Node<'a>>,
     },
     Const {
         val: Const
