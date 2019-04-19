@@ -1,7 +1,7 @@
 use msc::{Command, Script, Cmd};
 
 pub trait AsAst {
-    fn as_ast(&self) -> Vec<Node>;
+    fn as_ast(&self) -> ScriptAst;
 }
 
 fn cmd_to_binop(c: Cmd) -> BinOp {
@@ -204,9 +204,17 @@ where
 }
 
 impl AsAst for Script {
-    fn as_ast(&self) -> Vec<Node> {
-        let mut commands = self.commands
-            .iter()
+    fn as_ast(&self) -> ScriptAst {
+        let mut i = self.commands.iter();
+        let first_command = i.next().unwrap();
+        let (var_count, arg_count) = 
+            if let Cmd::Begin { var_count, arg_count } = first_command.cmd {
+                (var_count, arg_count)
+            }
+            else {
+                panic!("Script does not begin with Begin, begins with {:?}", first_command);
+            };
+        let mut commands = i
             .map(|c| InterForm::Cmd { cmd: c.clone() })
             .rev();
         
@@ -221,8 +229,19 @@ impl AsAst for Script {
             }
         }
         nodes.reverse();
-        nodes
+        ScriptAst {
+            nodes,
+            var_count,
+            arg_count,
+        }
     }
+}
+
+#[derive(Debug)]
+pub struct ScriptAst {
+    var_count: u16,
+    arg_count: u16,
+    nodes: Vec<Node>,
 }
 
 #[derive(Debug)]
