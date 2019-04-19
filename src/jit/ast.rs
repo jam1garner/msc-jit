@@ -93,6 +93,24 @@ fn cmd_to_assignop(c: Cmd) -> AssignOp {
     }
 }
 
+fn cmd_to_unaryop(c: Cmd) -> UnaryOp {
+    match c {
+        Cmd::Not => UnaryOp::Not,
+        Cmd::NotI => UnaryOp::BitNot,
+        Cmd::NegI => UnaryOp::Negate(Type::Int),
+        Cmd::NegF => UnaryOp::Negate(Type::Float),
+        _ => panic!("Cmd {:?} not a UnaryOp", c)
+    }
+}
+
+fn unaryop_cmd_type(c: Cmd) -> Type {
+    match c {
+        Cmd::Not | Cmd::NotI | Cmd::NegI => Type::Int,
+        Cmd::NegF => Type::Float,
+        _ => panic!("Cmd {:?} not a UnaryOp", c)
+    }
+}
+
 fn take_node<'a, I, T>(commands: &mut I, type_suspect: T) -> Option<Node>
 where
     I: Iterator<Item = InterForm>,
@@ -173,6 +191,14 @@ where
                             var_num,
                             right: Box::new(take_node(commands, None)?)
                         })
+                    }
+                    Cmd::Not | Cmd::NotI | Cmd::NegI | Cmd::NegF => {
+                        if c.push_bit {
+                            return Some(Node::UnaryOp {
+                                op: cmd_to_unaryop(c.cmd),
+                                left:  Box::new(take_node(commands, unaryop_cmd_type(c.cmd))?),
+                            });
+                        }
                     }
                     Cmd::IntToFloat { stack_pos } | Cmd::FloatToInt { stack_pos } => {
                         if stack_pos != 0 {
