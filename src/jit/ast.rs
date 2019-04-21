@@ -151,7 +151,10 @@ where
                     }
                     Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI | Cmd::ModI |
                     Cmd::AndI | Cmd::XorI | Cmd::ShiftL| Cmd::OrI  | Cmd::ShiftR |
-                    Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF => {
+                    Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF | Cmd::Equals |
+                    Cmd::NotEquals | Cmd::LessThan | Cmd::LessOrEqual | Cmd::Greater |
+                    Cmd::GreaterOrEqual | Cmd::EqualsF | Cmd::NotEqualsF | Cmd::LessThanF |
+                    Cmd::LessOrEqualF | Cmd::GreaterF | Cmd::GreaterOrEqualF => {
                         if c.push_bit {
                             return Some(Node::BinOp {
                                 op:    cmd_to_binop(c.cmd),
@@ -219,14 +222,53 @@ where
                                   )?)
                         })
                     }
+                    Cmd::PrintF { arg_count } => {
+                        let mut args = vec![];
+                        for _ in 0..arg_count-1 {
+                            args.push(take_node(commands, Type::Float)?);
+                        }
+                        args.reverse();
+                        let str_num = Box::new(take_node(commands, Type::Int)?);
+                        return Some(Node::Printf {
+                            str_num,
+                            args
+                        });
+                    }
+                    Cmd::Sys { arg_count, sys_num } => {
+                        let mut args = vec![];
+                        for _ in 0..arg_count {
+                            args.push(take_node(commands, Type::Float)?);
+                        }
+                        args.reverse();
+                        return Some(Node::SysCall {
+                            sys_num,
+                            args
+                        });
+                    }
+                    Cmd::Jump { loc: _ } | Cmd::Jump5 { loc: _ } | Cmd::Else { loc: _ } => panic!("Jump unsupported"),
                     Cmd::Nop | Cmd::Begin { var_count: _, arg_count: _ } | Cmd::Unk1 |
-                    Cmd::ErrorC | Cmd::Error4C => {}
+                    Cmd::ErrorC | Cmd::Error4C | Cmd::Exit | Cmd::Push | Cmd::Pop => {}
                     _ => {}
                 }
             }
             _ => {}
         }
     }
+}
+
+fn group_structures<'a, I>(commands: &mut I) -> Vec<InterForm>
+where
+    I: Iterator<Item = &'a Command>,
+{
+    let mut out: Vec<InterForm> = vec![];
+    while let Some(c) = commands.next() {
+        match c.cmd {
+            _ => {
+                out.push(InterForm::Cmd { cmd: c.clone() });
+            }
+        }
+    }
+    out
 }
 
 impl AsAst for Script {
@@ -240,19 +282,12 @@ impl AsAst for Script {
             else {
                 panic!("Script does not begin with Begin, begins with {:?}", first_command);
             };
-        let mut commands = i
-            .map(|c| InterForm::Cmd { cmd: c.clone() })
-            .rev();
+        let temp = group_structures(&mut i);
+        let mut commands = temp.iter().cloned().rev();
         
         let mut nodes = vec![];
-        loop {
-            let a = take_node(&mut commands, None);
-            println!("{:?}", a);
-            if let Some(node) = a {
-                nodes.push(node);
-            } else {
-                break
-            }
+        while let Some(node) = take_node(&mut commands, None) {
+            nodes.push(node);
         }
         nodes.reverse();
         ScriptAst {
@@ -270,7 +305,7 @@ pub struct ScriptAst {
     nodes: Vec<Node>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InterForm {
     IfElseBlock {
         if_block: Vec<InterForm>,
@@ -284,7 +319,7 @@ pub enum InterForm {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Assign {
         op: AssignOp,
@@ -320,6 +355,10 @@ pub enum Node {
         sys_num: u8,
         args: Vec<Node>,
     },
+    Printf {
+        str_num: Box<Node>,
+        args: Vec<Node>
+    },
     Var {
         is_global: bool,
         var_num: u16,
@@ -335,7 +374,7 @@ impl Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinOp {
     Add(Type),
     Sub(Type),
@@ -357,7 +396,7 @@ pub enum BinOp {
     GreaterThan(Type),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOp {
     Not,
     BitNot,
@@ -366,7 +405,7 @@ pub enum UnaryOp {
     Negate(Type)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AssignOp {
     Set(Type),
     Add(Type),
@@ -379,19 +418,19 @@ pub enum AssignOp {
     Xor,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Fix {
     Pre,
     Post
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Int,
     Float
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Const {
     U32(u32),
     F32(f32),
