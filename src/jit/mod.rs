@@ -33,7 +33,7 @@ impl<'a> JitMemory {
     }
 
     pub unsafe fn lock(&mut self) -> i32 {
-        self.locked = false;
+        self.locked = true;
         libc::mprotect(self._contents, self.size, libc::PROT_EXEC | libc::PROT_READ)
     }
 
@@ -43,8 +43,8 @@ impl<'a> JitMemory {
     }
 
     pub unsafe fn run<T>(&self) -> T {
-        if self.locked {
-            panic!("Cannot run locked JitMemory");
+        if !self.locked {
+            panic!("Cannot run unlocked JitMemory");
         }
         let jit_func: (extern "C" fn() -> T) = mem::transmute(self._contents);
         jit_func()
