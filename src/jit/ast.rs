@@ -119,7 +119,6 @@ where
     let type_suspect = type_suspect.into();
     loop {
         let next_command = commands.next()?;
-        println!("{:?}", next_command);
         match next_command {
             InterForm::Cmd{ cmd: c } => {
                 match c.cmd {
@@ -300,9 +299,9 @@ impl AsAst for Script {
 
 #[derive(Debug)]
 pub struct ScriptAst {
-    var_count: u16,
-    arg_count: u16,
-    nodes: Vec<Node>,
+    pub var_count: u16,
+    pub arg_count: u16,
+    pub nodes: Vec<Node>,
 }
 
 #[derive(Debug, Clone)]
@@ -370,6 +369,18 @@ impl Node {
         match t {
             Type::Int => Node::Const { val: Const::U32( unsafe { std::mem::transmute(val) } ) },
             Type::Float => Node::Const { val: Const::F32(val as f32) } 
+        }
+    }
+
+    pub fn as_u32(&self) -> Option<u64> {
+        if let Node::Const { val } = self {
+            if let Const::U32(val) = val {
+                Some(*val as u64)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 }

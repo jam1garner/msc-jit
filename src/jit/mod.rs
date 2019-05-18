@@ -14,7 +14,7 @@ pub struct JitMemory {
     size: usize,
 }
 
-const PAGE_SIZE: usize = 4096;
+pub const PAGE_SIZE: usize = 4096;
 
 impl<'a> JitMemory {
     pub fn new(num_pages: usize) -> JitMemory {
