@@ -10,7 +10,7 @@ fn main() {
                     .unwrap();
     
     //println!("{:#?}", test.scripts[0].as_ast());
-    let mut test_compiled = test.compile();
+    let mut test_compiled = test.compile().expect("Failed to compile");
     test_compiled.lock_all();
     test_compiled.run();
 }
