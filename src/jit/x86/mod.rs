@@ -40,8 +40,8 @@ impl Compilable for MscsbFile {
         let mut string_offsets: Vec<usize> = vec![];
         for string in self.strings.iter() {
             string_offsets.push(string_writer.get_ref().len());
-            string_writer.write(string.as_bytes()).unwrap();
-            string_writer.write(&[0u8]).unwrap();
+            string_writer.write(string.as_bytes()).ok()?;
+            string_writer.write(&[0u8]).ok()?;
         }
         let string_section = string_writer.into_inner();
         let string_offsets = string_offsets.iter().map(
@@ -52,7 +52,7 @@ impl Compilable for MscsbFile {
 
         // Setup stack frame and whatnot
         if let Some((_, var_count)) = get_var_info(&self.scripts[0]) {
-            writer.setup_stack_frame(var_count as u32).unwrap();
+            writer.setup_stack_frame(var_count as u32).ok()?;
             for cmd in self.scripts[0].iter().skip(1) {
                 match cmd.cmd {
                     Cmd::Begin { arg_count: _, var_count: _ } => {
@@ -60,17 +60,17 @@ impl Compilable for MscsbFile {
                     }
                     Cmd::PushShort { val } => {
                         if cmd.push_bit {
-                            writer.push(val as u32).unwrap();
+                            writer.push(val as u32).ok()?;
                         }
                     }
                     Cmd::PushInt { val } => {
                         if cmd.push_bit {
-                            writer.push(val).unwrap();
+                            writer.push(val).ok()?;
                         }
                     }
                     Cmd::MultI | Cmd::DivI => {
-                        writer.pop(Reg::RCX).unwrap();
-                        writer.pop(Reg::RAX).unwrap();
+                        writer.pop(Reg::RCX).ok()?;
+                        writer.pop(Reg::RAX).ok()?;
                         if cmd.push_bit {
                             writer.write1(
                                 match cmd.cmd {
@@ -79,55 +79,65 @@ impl Compilable for MscsbFile {
                                     _ => { unreachable!() }
                                 },
                                 Operand::Direct(Reg::ECX)
-                            ).unwrap();
-                            writer.push(Reg::RAX).unwrap();
+                            ).ok()?;
+                            writer.push(Reg::RAX).ok()?;
                         }
                     }
-                    Cmd::AddI | Cmd::SubI => {
-                        writer.pop(Reg::RCX).unwrap();
-                        writer.pop(Reg::RAX).unwrap();
+                    Cmd::AddI | Cmd::SubI | Cmd::ShiftL | Cmd::ShiftR | Cmd::AndI | Cmd::OrI |
+                    Cmd::XorI => {
+                        writer.pop(Reg::RCX).ok()?;
+                        writer.pop(Reg::RAX).ok()?;
                         if cmd.push_bit {
                             writer.write2(
                                 match cmd.cmd {
                                     Cmd::AddI => Mnemonic::ADD,
                                     Cmd::SubI => Mnemonic::SUB,
+                                    Cmd::ShiftR => Mnemonic::SHR,
+                                    Cmd::ShiftL => Mnemonic::SHL,
+                                    Cmd::AndI => Mnemonic::AND,
+                                    Cmd::OrI => Mnemonic::OR,
+                                    Cmd::XorI => Mnemonic::XOR,
                                     _ => { unreachable!() }
                                 },
                                 Operand::Direct(Reg::EAX),
                                 Operand::Direct(Reg::ECX)
-                            ).unwrap();
-                            writer.push(Reg::RAX).unwrap();
+                            ).ok()?;
+                            writer.push(Reg::RAX).ok()?;
                         }
                     }
-                    Cmd::NegI => {
+                    Cmd::NegI | Cmd::NotI => {
                         if cmd.push_bit {
                             writer.write1(
-                                Mnemonic::NEG,
-                                Operand::Indirect(Reg::RSP, Some(OperandSize::Dword), None)
-                            ).unwrap();
+                                match cmd.cmd {
+                                    Cmd::NegI => Mnemonic::NEG,
+                                    Cmd::NotI => Mnemonic::NOT,
+                                    _ => { unreachable!() }
+                                },
+                                (Reg::RSP, OperandSize::Dword).into_op()
+                            ).ok()?;
                         } else {
-                            writer.pop(Reg::RAX).unwrap();
+                            writer.pop(Reg::RAX).ok()?;
                         }
                     }
                     Cmd::PrintF { arg_count } => {
-                        writer.pop(Reg::RAX).unwrap();
-                        writer.push(Reg::RDI).unwrap();
-                        writer.mov(Reg::RDI,string_offsets.as_ptr() as u64).unwrap();
+                        writer.pop(Reg::RAX).ok()?;
+                        writer.push(Reg::RDI).ok()?;
+                        writer.mov(Reg::RDI,string_offsets.as_ptr() as u64).ok()?;
                         writer.mov(
                             Reg::RDI,
                             (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
-                        ).unwrap();
-                        writer.mov(Reg::AX, 0u16).unwrap();
-                        writer.mov(Reg::RCX, libc::printf as u64).unwrap();
-                        writer.call(Reg::RCX).unwrap();
-                        writer.pop(Reg::RDI).unwrap();
+                        ).ok()?;
+                        writer.mov(Reg::AX, 0u16).ok()?;
+                        writer.mov(Reg::RCX, libc::printf as u64).ok()?;
+                        writer.call(Reg::RCX).ok()?;
+                        writer.pop(Reg::RDI).ok()?;
                     }
                     Cmd::Return6 | Cmd::Return8 => {
-                        writer.pop(Reg::RAX).unwrap();
-                        writer.write_ret(var_count as u32).unwrap();
+                        writer.pop(Reg::RAX).ok()?;
+                        writer.write_ret(var_count as u32).ok()?;
                     }
                     Cmd::Return7 | Cmd::Return9 => {
-                        writer.write_ret(var_count as u32).unwrap();
+                        writer.write_ret(var_count as u32).ok()?;
                     }
                     Cmd::Nop | Cmd::End => {}
                     _ => {
@@ -135,11 +145,11 @@ impl Compilable for MscsbFile {
                     }
                 }
             }
-            writer.write_ret(var_count as u32).unwrap();
+            writer.write_ret(var_count as u32).ok()?;
         } else {
             writer.write0(
                 Mnemonic::RET
-            ).unwrap();
+            ).ok()?;
         }
         let buffer = writer.get_inner_writer_ref().get_ref();
         let mut mem = JitMemory::new((buffer.len() + (PAGE_SIZE - 1)) / PAGE_SIZE);

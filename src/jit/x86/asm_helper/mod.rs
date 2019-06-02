@@ -87,7 +87,7 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
     fn push<I: IntoOperand>(&mut self, operand: I) -> Result<(), InstructionEncodingError> {
         self.write1(
             Mnemonic::PUSH,
-            operand.into()
+            operand.into_op()
         )?;
         Ok(())
     }
@@ -95,8 +95,8 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
     fn mov<I: IntoOperand, I2: IntoOperand>(&mut self, op1: I, op2: I2) -> Result<(), InstructionEncodingError> {
         self.write2(
             Mnemonic::MOV,
-            op1.into(),
-            op2.into()
+            op1.into_op(),
+            op2.into_op()
         )?;
         Ok(())
     }
@@ -104,7 +104,7 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
     fn call<I: IntoOperand>(&mut self, op1: I) -> Result<(), InstructionEncodingError> {
         self.write1(
             Mnemonic::CALL,
-            op1.into()
+            op1.into_op()
         )?;
         Ok(())
     }
