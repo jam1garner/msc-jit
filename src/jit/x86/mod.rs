@@ -124,6 +124,19 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         }
                     }
+                    Cmd::NegI => {
+                        if cmd.push_bit {
+                            writer.write1(
+                                Mnemonic::NEG,
+                                Operand::Indirect(Reg::RSP, Some(OperandSize::Dword), None)
+                            ).unwrap();
+                        } else {
+                            writer.write1(
+                                Mnemonic::POP,
+                                Operand::Direct(Reg::RAX)
+                            ).unwrap();
+                        }
+                    }
                     Cmd::PrintF { arg_count } => {
                         writer.write1(
                             Mnemonic::POP,
