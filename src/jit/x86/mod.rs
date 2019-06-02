@@ -75,6 +75,32 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         }
                     }
+                    Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI => {
+                        writer.write1(
+                            Mnemonic::POP,
+                            Operand::Direct(Reg::RCX)
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::POP,
+                            Operand::Direct(Reg::RAX)
+                        ).unwrap();
+                        if cmd.push_bit {
+                            writer.write2(
+                                match cmd.cmd {
+                                    Cmd::AddI => Mnemonic::ADD,
+                                    Cmd::SubI => Mnemonic::SUB,
+                                    Cmd::MultI => Mnemonic::IMUL,
+                                    _ => { unreachable!() }
+                                },
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::ECX)
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::PUSH,
+                                Operand::Direct(Reg::RAX)
+                            ).unwrap();
+                        }
+                    }
                     Cmd::PrintF { arg_count } => {
                         writer.write1(
                             Mnemonic::POP,
@@ -120,6 +146,13 @@ impl Compilable for MscsbFile {
                             Mnemonic::POP,
                             Operand::Direct(Reg::RDI)
                         ).unwrap();
+                    }
+                    Cmd::Return6 | Cmd::Return8 => {
+                        writer.write1(
+                            Mnemonic::POP,
+                            Operand::Direct(Reg::RAX)
+                        ).unwrap();
+                        writer.write_ret(var_count as u32).unwrap();
                     }
                     Cmd::Nop | Cmd::End => {}
                     _ => {
