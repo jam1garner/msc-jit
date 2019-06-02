@@ -75,7 +75,31 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         }
                     }
-                    Cmd::AddI | Cmd::SubI | Cmd::MultI | Cmd::DivI => {
+                    Cmd::MultI | Cmd::DivI => {
+                        writer.write1(
+                            Mnemonic::POP,
+                            Operand::Direct(Reg::RCX)
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::POP,
+                            Operand::Direct(Reg::RAX)
+                        ).unwrap();
+                        if cmd.push_bit {
+                            writer.write1(
+                                match cmd.cmd {
+                                    Cmd::MultI => Mnemonic::MUL,
+                                    Cmd::DivI => Mnemonic::DIV,
+                                    _ => { unreachable!() }
+                                },
+                                Operand::Direct(Reg::ECX)
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::PUSH,
+                                Operand::Direct(Reg::RAX)
+                            ).unwrap();
+                        }
+                    }
+                    Cmd::AddI | Cmd::SubI => {
                         writer.write1(
                             Mnemonic::POP,
                             Operand::Direct(Reg::RCX)
@@ -89,7 +113,6 @@ impl Compilable for MscsbFile {
                                 match cmd.cmd {
                                     Cmd::AddI => Mnemonic::ADD,
                                     Cmd::SubI => Mnemonic::SUB,
-                                    Cmd::MultI => Mnemonic::IMUL,
                                     _ => { unreachable!() }
                                 },
                                 Operand::Direct(Reg::EAX),
