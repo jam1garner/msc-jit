@@ -154,6 +154,9 @@ impl Compilable for MscsbFile {
                         ).unwrap();
                         writer.write_ret(var_count as u32).unwrap();
                     }
+                    Cmd::Return7 | Cmd::Return9 => {
+                        writer.write_ret(var_count as u32).unwrap();
+                    }
                     Cmd::Nop | Cmd::End => {}
                     _ => {
                         println!("{:?} not recognized", cmd);
