@@ -1,11 +1,12 @@
-use std::mem;
 use std::io::prelude::*;
 use super::{JitMemory, PAGE_SIZE};
-use super::ast::*;
 use msc::{MscsbFile, Cmd, Script};
 use std::io::Cursor;
 use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
+
+mod asm_helper;
+use asm_helper::*;
 
 pub struct CompiledProgram {
     pub mem: Vec<JitMemory>,
@@ -32,8 +33,6 @@ fn get_var_info(script: &Script) -> Option<(u16, u16)> {
 
 impl Compilable for MscsbFile {
     fn compile(&self) -> Option<CompiledProgram> {
-
-
         let buffer = Cursor::new(Vec::new());
         let mut writer = InstructionWriter::new(buffer, Mode::Long);
         
@@ -61,29 +60,17 @@ impl Compilable for MscsbFile {
                     }
                     Cmd::PushShort { val } => {
                         if cmd.push_bit {
-                            writer.write1(
-                                Mnemonic::PUSH,
-                                Operand::Literal32(val as u32)
-                            ).unwrap();
+                            writer.push(val as u32).unwrap();
                         }
                     }
                     Cmd::PushInt { val } => {
                         if cmd.push_bit {
-                            writer.write1(
-                                Mnemonic::PUSH,
-                                Operand::Literal32(val)
-                            ).unwrap();
+                            writer.push(val).unwrap();
                         }
                     }
                     Cmd::MultI | Cmd::DivI => {
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RCX)
-                        ).unwrap();
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RAX)
-                        ).unwrap();
+                        writer.pop(Reg::RCX).unwrap();
+                        writer.pop(Reg::RAX).unwrap();
                         if cmd.push_bit {
                             writer.write1(
                                 match cmd.cmd {
@@ -93,21 +80,12 @@ impl Compilable for MscsbFile {
                                 },
                                 Operand::Direct(Reg::ECX)
                             ).unwrap();
-                            writer.write1(
-                                Mnemonic::PUSH,
-                                Operand::Direct(Reg::RAX)
-                            ).unwrap();
+                            writer.push(Reg::RAX).unwrap();
                         }
                     }
                     Cmd::AddI | Cmd::SubI => {
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RCX)
-                        ).unwrap();
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RAX)
-                        ).unwrap();
+                        writer.pop(Reg::RCX).unwrap();
+                        writer.pop(Reg::RAX).unwrap();
                         if cmd.push_bit {
                             writer.write2(
                                 match cmd.cmd {
@@ -118,10 +96,7 @@ impl Compilable for MscsbFile {
                                 Operand::Direct(Reg::EAX),
                                 Operand::Direct(Reg::ECX)
                             ).unwrap();
-                            writer.write1(
-                                Mnemonic::PUSH,
-                                Operand::Direct(Reg::RAX)
-                            ).unwrap();
+                            writer.push(Reg::RAX).unwrap();
                         }
                     }
                     Cmd::NegI => {
@@ -131,63 +106,24 @@ impl Compilable for MscsbFile {
                                 Operand::Indirect(Reg::RSP, Some(OperandSize::Dword), None)
                             ).unwrap();
                         } else {
-                            writer.write1(
-                                Mnemonic::POP,
-                                Operand::Direct(Reg::RAX)
-                            ).unwrap();
+                            writer.pop(Reg::RAX).unwrap();
                         }
                     }
                     Cmd::PrintF { arg_count } => {
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RAX)
+                        writer.pop(Reg::RAX).unwrap();
+                        writer.push(Reg::RDI).unwrap();
+                        writer.mov(Reg::RDI,string_offsets.as_ptr() as u64).unwrap();
+                        writer.mov(
+                            Reg::RDI,
+                            (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
                         ).unwrap();
-                        writer.write1(
-                            Mnemonic::PUSH,
-                            Operand::Direct(Reg::RDI)
-                        ).unwrap();
-                        writer.write2(
-                            Mnemonic::MOV,
-                            Operand::Direct(Reg::RDI),
-                            Operand::Literal64(string_offsets.as_ptr() as u64)
-                        ).unwrap();
-                        writer.write2(
-                            Mnemonic::MOV,
-                            Operand::Direct(Reg::RDI),
-                            Operand::IndirectScaledIndexed(
-                                Reg::RDI,
-                                Reg::RAX,
-                                RegScale::Eight,
-                                Some(OperandSize::Qword),
-                                None
-                            )
-                        ).unwrap();
-                        writer.write2(
-                            Mnemonic::MOV,
-                            Operand::Direct(Reg::AX),
-                            Operand::Literal16(0)
-                        ).unwrap();
-                        writer.write2(
-                            Mnemonic::MOV,
-                            Operand::Direct(Reg::RCX),
-                            Operand::Literal64(
-                                libc::printf as u64
-                            )
-                        ).unwrap();
-                        writer.write1(
-                            Mnemonic::CALL,
-                            Operand::Direct(Reg::RCX)
-                        ).unwrap();
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RDI)
-                        ).unwrap();
+                        writer.mov(Reg::AX, 0u16).unwrap();
+                        writer.mov(Reg::RCX, libc::printf as u64).unwrap();
+                        writer.call(Reg::RCX).unwrap();
+                        writer.pop(Reg::RDI).unwrap();
                     }
                     Cmd::Return6 | Cmd::Return8 => {
-                        writer.write1(
-                            Mnemonic::POP,
-                            Operand::Direct(Reg::RAX)
-                        ).unwrap();
+                        writer.pop(Reg::RAX).unwrap();
                         writer.write_ret(var_count as u32).unwrap();
                     }
                     Cmd::Return7 | Cmd::Return9 => {
@@ -205,40 +141,6 @@ impl Compilable for MscsbFile {
                 Mnemonic::RET
             ).unwrap();
         }
-        /*
-        let ast = self.scripts[0].as_ast();
-        for node in ast.nodes.iter() {
-            match node {
-                Node::Printf { str_num, args: _ } => {
-                    let str_num = str_num.as_u32().expect("Printf formatter not string literal");
-                    writer.write2(
-                        Mnemonic::MOV,
-                        Operand::Direct(Reg::RDI),
-                        Operand::Literal64(
-                            string_offsets[str_num as usize] as u64
-                        )
-                    ).unwrap();
-                    writer.write2(
-                        Mnemonic::MOV,
-                        Operand::Direct(Reg::RAX),
-                        Operand::Literal64(0)
-                    ).unwrap();
-                    writer.write2(
-                        Mnemonic::MOV,
-                        Operand::Direct(Reg::RCX),
-                        Operand::Literal64(
-                            libc::printf as u64
-                        )
-                    ).unwrap();
-                    writer.write1(
-                        Mnemonic::CALL,
-                        Operand::Direct(Reg::RCX)
-                    ).unwrap();
-                }
-                _ => {}
-            }
-        }*/
-        
         let buffer = writer.get_inner_writer_ref().get_ref();
         let mut mem = JitMemory::new((buffer.len() + (PAGE_SIZE - 1)) / PAGE_SIZE);
         unsafe {
@@ -271,76 +173,8 @@ impl CompiledProgram {
         }
         unsafe {
             let ret = self.mem[self.entrypoint_index].run::<u64>();
-            println!("Return value - {}", ret);
+            println!("Return value - 0x{:X}", ret);
         }
     }
 }
 
-trait AsmWriterHelper {
-    fn write_ret(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError>;
-    fn setup_stack_frame(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError>;
-    fn save_nonvolatile_regs(&mut self) -> Result<(), InstructionEncodingError>;
-    fn restore_nonvolatile_regs(&mut self) -> Result<(), InstructionEncodingError>;
-}
-
-static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
-                                    Reg::R12, Reg::R13, Reg::R14, Reg::R15];
-
-impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
-    fn write_ret(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError> {
-        self.write2(
-            Mnemonic::MOV,
-            Operand::Direct(Reg::RSP),
-            Operand::Direct(Reg::RBP)
-        )?;
-        if num_vars > 0 {
-            self.write2(
-                Mnemonic::ADD,
-                Operand::Direct(Reg::RSP),
-                Operand::Literal32(4 * num_vars)
-            )?;
-        }
-        self.write1(
-            Mnemonic::POP,
-            Operand::Direct(Reg::RBP)
-        )?;
-        self.write0(
-            Mnemonic::RET
-        )?;
-        Ok(())
-    }
-
-    fn setup_stack_frame(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError> {
-        self.write1(
-            Mnemonic::PUSH,
-            Operand::Direct(Reg::RBP)
-        )?;
-        if num_vars > 0 {
-            self.write2(
-                Mnemonic::SUB,
-                Operand::Direct(Reg::RSP),
-                Operand::Literal32(4 * num_vars)
-            )?;
-        }
-        self.write2(
-            Mnemonic::MOV,
-            Operand::Direct(Reg::RBP),
-            Operand::Direct(Reg::RSP)
-        )?;
-        Ok(())
-    }
-
-    fn save_nonvolatile_regs(&mut self) -> Result<(), InstructionEncodingError> {
-        for reg in NONVOLATILE_REGS {
-            self.write1(Mnemonic::PUSH, Operand::Direct(*reg))?;
-        }
-        Ok(())
-    }
-
-    fn restore_nonvolatile_regs(&mut self) -> Result<(), InstructionEncodingError> {
-        for reg in NONVOLATILE_REGS.iter().rev() {
-            self.write1(Mnemonic::POP, Operand::Direct(*reg))?;
-        }
-        Ok(())
-    }
-}
