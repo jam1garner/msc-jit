@@ -13,6 +13,8 @@ pub trait AsmWriterHelper {
     fn push<I: IntoOperand>(&mut self, operand: I) -> Result<(), InstructionEncodingError>;
     fn mov<I: IntoOperand, I2: IntoOperand>(&mut self, op1: I, op2: I2) -> Result<(), InstructionEncodingError>;
     fn call<I: IntoOperand>(&mut self, op1: I) -> Result<(), InstructionEncodingError>;
+    fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
+    fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
 }
 
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
@@ -105,6 +107,24 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
         self.write1(
             Mnemonic::CALL,
             op1.into_op()
+        )?;
+        Ok(())
+    }
+    
+    fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError> {
+        self.mov(Reg::RAX, globals as u64)?;
+        self.mov(
+            reg,
+            (Reg::RAX, global_num as u64 * 4, OperandSize::Qword)
+        )?;
+        Ok(())
+    }
+    
+    fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError> {
+        self.mov(Reg::RAX, globals as u64)?;
+        self.mov(
+            (Reg::RAX, global_num as u64 * 4, OperandSize::Qword),
+            reg
         )?;
         Ok(())
     }

@@ -13,6 +13,7 @@ pub struct CompiledProgram {
     pub string_section: Vec<u8>,
     pub string_offsets: Vec<*const c_void>,
     pub entrypoint_index: usize,
+    pub global_vars: Vec<u32>,
 }
 
 pub trait Compilable {
@@ -33,6 +34,7 @@ fn get_var_info(script: &Script) -> Option<(u16, u16)> {
 
 impl Compilable for MscsbFile {
     fn compile(&self) -> Option<CompiledProgram> {
+        let global_vars = vec![0; 0x100];
         let buffer = Cursor::new(Vec::new());
         let mut writer = InstructionWriter::new(buffer, Mode::Long);
         
@@ -66,6 +68,30 @@ impl Compilable for MscsbFile {
                     Cmd::PushInt { val } => {
                         if cmd.push_bit {
                             writer.push(val).ok()?;
+                        }
+                    }
+                    Cmd::PushVar { var_type, var_num } => {
+                        if var_type == 0 {
+                            // Local variable
+                            writer.mov(
+                                Reg::EAX,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
+                            ).unwrap();
+                            writer.push(Reg::RAX).ok()?;
+                        } else {
+                            // Global variable
+                        }
+                    }
+                    Cmd::SetVar { var_type, var_num } => {
+                        if var_type == 0 {
+                            // Local var
+                            writer.pop(Reg::RAX).ok()?;
+                            writer.mov(
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
+                                Reg::EAX
+                            ).unwrap();
+                        } else {
+                            // Global var
                         }
                     }
                     Cmd::MultI | Cmd::DivI => {
@@ -147,9 +173,7 @@ impl Compilable for MscsbFile {
             }
             writer.write_ret(var_count as u32).ok()?;
         } else {
-            writer.write0(
-                Mnemonic::RET
-            ).ok()?;
+            writer.write0(Mnemonic::RET).ok()?;
         }
         let buffer = writer.get_inner_writer_ref().get_ref();
         let mut mem = JitMemory::new((buffer.len() + (PAGE_SIZE - 1)) / PAGE_SIZE);
@@ -161,7 +185,7 @@ impl Compilable for MscsbFile {
         println!("\n\n\n");
         Some(CompiledProgram {
             mem: vec![mem], entrypoint_index: 0,
-            string_section, string_offsets
+            string_section, string_offsets, global_vars
         })
     }
 }
