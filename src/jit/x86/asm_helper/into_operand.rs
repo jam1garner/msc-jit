@@ -42,7 +42,11 @@ impl IntoOperand for (Reg, OperandSize) {
 
 impl IntoOperand for (Reg, u64, OperandSize) {
     fn into_op(self) -> Operand {
-        Operand::IndirectDisplaced(self.0, self.1, Some(self.2), None)
+        if self.1 == 0 {
+            Operand::Indirect(self.0, Some(self.2), None)
+        } else {
+            Operand::IndirectDisplaced(self.0, self.1, Some(self.2), None)
+        }
     }
 }
 

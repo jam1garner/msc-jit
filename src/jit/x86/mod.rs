@@ -80,6 +80,8 @@ impl Compilable for MscsbFile {
                             writer.push(Reg::RAX).ok()?;
                         } else {
                             // Global variable
+                            writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
+                            writer.push(Reg::RAX).ok()?;
                         }
                     }
                     Cmd::SetVar { var_type, var_num } => {
@@ -92,6 +94,8 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         } else {
                             // Global var
+                            writer.pop(Reg::RCX).ok()?;
+                            writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
                         }
                     }
                     Cmd::MultI | Cmd::DivI => {
