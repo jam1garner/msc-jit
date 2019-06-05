@@ -4,9 +4,12 @@ use msc::{MscsbFile, Cmd, Script};
 use std::io::Cursor;
 use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
+use std::process::{Command, Stdio};
 
 mod asm_helper;
 use asm_helper::*;
+mod printf;
+use printf::printf;
 
 pub struct CompiledProgram {
     pub mem: Vec<JitMemory>,
@@ -98,6 +101,82 @@ impl Compilable for MscsbFile {
                             writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
                         }
                     }
+                    Cmd::IncI { var_type, var_num } | Cmd::DecI { var_type, var_num } => {
+                        if var_type == 0 {
+                            // Local var
+                            writer.write1(
+                                Mnemonic::INC,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword).into_op()
+                            ).unwrap();
+                        } else {
+                            // Global var
+                            writer.get_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                            writer.write1(
+                                Mnemonic::INC,
+                                Operand::Direct(Reg::RCX)
+                            ).unwrap();
+                            writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                        }
+                    }
+                    Cmd::AddVarBy { var_type, var_num } | Cmd::SubVarBy { var_type, var_num } |
+                    Cmd::AndVarBy { var_type, var_num } | Cmd::OrVarBy {var_type, var_num} |
+                    Cmd::XorVarBy { var_type, var_num } => {
+                        writer.pop(Reg::RAX).ok()?;
+                        let operation = match cmd.cmd {
+                            Cmd::AddVarBy { var_type: _, var_num: _ } => Mnemonic::ADD,
+                            Cmd::SubVarBy { var_type: _, var_num: _ } => Mnemonic::SUB,
+                            Cmd::AndVarBy { var_type: _, var_num: _ } => Mnemonic::AND,
+                            Cmd::OrVarBy { var_type: _, var_num: _ } => Mnemonic::OR,
+                            Cmd::XorVarBy { var_type: _, var_num: _ } => Mnemonic::XOR,
+                            _ => { unreachable!() }
+                        };
+                        if var_type == 0 {
+                            writer.mov(
+                                Reg::ECX,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
+                            ).ok()?;
+                            writer.write2(
+                                operation,
+                                Operand::Direct(Reg::ECX),
+                                Operand::Direct(Reg::EAX),
+                            ).unwrap();
+                            writer.mov(
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
+                                Reg::ECX
+                            ).ok()?;
+                        } else {
+                            writer.get_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                            writer.write2(
+                                operation,
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::ECX)
+                            ).unwrap();
+                            writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                        }
+                    }
+                    Cmd::MultVarBy { var_type, var_num } | Cmd::DivVarBy { var_type, var_num } => {
+                        writer.pop(Reg::RCX).ok()?;
+                        if var_type == 0 {
+                            writer.mov(
+                                Reg::EAX,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
+                            ).ok()?;
+                            writer.write1(
+                                match cmd.cmd {
+                                    Cmd::MultVarBy { var_type: _, var_num: _ } => Mnemonic::MUL,
+                                    Cmd::DivVarBy { var_type: _, var_num: _ } => Mnemonic::DIV,
+                                    _ => { unreachable!() }
+                                },
+                                Operand::Direct(Reg::ECX),
+                            ).unwrap();
+                            writer.mov(
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
+                                Reg::EAX
+                            ).ok()?;
+                        } else {
+                            
+                        }
+                    }
                     Cmd::MultI | Cmd::DivI => {
                         writer.pop(Reg::RCX).ok()?;
                         writer.pop(Reg::RAX).ok()?;
@@ -185,13 +264,27 @@ impl Compilable for MscsbFile {
             &mem.as_slice()[..buffer.len()].copy_from_slice(&buffer[..]);
         }
         println!("\n\nEmitted asm:");
-        println!("{}", buffer.iter().map(|b| format!("{:02X}", b)).collect::<Vec<String>>().join(" "));
+        objdump(buffer);
+
+        //println!("{}", buffer.iter().map(|b| format!("{:02X}", b)).collect::<Vec<String>>().join(" "));
         println!("\n\n\n");
         Some(CompiledProgram {
             mem: vec![mem], entrypoint_index: 0,
             string_section, string_offsets, global_vars
         })
     }
+}
+
+fn objdump(buffer: &Vec<u8>) {
+    std::fs::File::create("/tmp/msc-jit-temp.bin").unwrap()
+        .write_all(buffer).unwrap();
+    // objdump -D -b binary -mi386 -Maddr16,data16,x86-64,intel /dev/stdin
+    let output = Command::new("objdump")
+        .args(&["-D", "-b", "binary", "-mi386", "-Maddr16,data16,x86-64,intel", "/tmp/msc-jit-temp.bin"])
+        .output()
+        .unwrap();
+    std::fs::remove_file("/tmp/msc-jit-temp.bin").ok();
+    println!("{}", String::from_utf8_lossy(&output.stdout));
 }
 
 impl CompiledProgram {
