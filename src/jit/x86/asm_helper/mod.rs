@@ -16,6 +16,8 @@ pub trait AsmWriterHelper {
     fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn copy_to_fpu(&mut self, count: usize) -> Result<(), InstructionEncodingError>;
+    fn get_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError>;
+    fn set_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError>;
 }
 
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
@@ -127,6 +129,24 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
             (Reg::RDX, global_num as u64 * 4, OperandSize::Dword),
             reg
         )?;
+        Ok(())
+    }
+
+    fn get_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError> {
+        self.mov(Reg::RDX, globals as u64)?;
+        self.write1(
+            Mnemonic::FLD,
+            (Reg::RDX, global_num as u64 * 4, OperandSize::Dword).into_op()
+        )?;
+        Ok(())
+    }
+
+    fn set_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError> {
+        self.mov(Reg::RDX, globals as u64)?;
+        self.write1(
+            Mnemonic::FSTP,
+            (Reg::RDX, global_num as u64 * 4, OperandSize::Dword).into_op()
+        ).unwrap();
         Ok(())
     }
 

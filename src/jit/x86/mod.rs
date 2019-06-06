@@ -118,6 +118,39 @@ impl Compilable for MscsbFile {
                             writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
                         }
                     }
+                    Cmd::IncF { var_type, var_num } | Cmd::DecF { var_type, var_num } => {
+                        writer.mov(
+                            (Reg::RSP, -4i64 as u64, OperandSize::Dword),
+                            if let Cmd::IncF { var_type: _, var_num: _ } = cmd.cmd {
+                                1u32
+                            } else {
+                                -1i32 as u32
+                            }
+                        ).unwrap();
+                        if var_type == 0 {
+                            // Local var
+                            writer.write1(
+                                Mnemonic::FLD,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword).into_op()
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::FIADD,
+                                (Reg::RSP, -4i64 as u64, OperandSize::Dword).into_op()
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::FSTP,
+                                (Reg::RBP, var_num as u64 * 4, OperandSize::Dword).into_op()
+                            ).unwrap();
+                        } else {
+                            // Global var
+                            writer.get_global_float(global_vars.as_ptr(), var_num).unwrap();
+                            writer.write1(
+                                Mnemonic::FIADD,
+                                (Reg::RSP, -4i64 as u64, OperandSize::Dword).into_op()
+                            ).unwrap();
+                            writer.set_global_float(global_vars.as_ptr(), var_num).unwrap();
+                        }
+                    }
                     Cmd::AddVarBy { var_type, var_num } | Cmd::SubVarBy { var_type, var_num } |
                     Cmd::AndVarBy { var_type, var_num } | Cmd::OrVarBy {var_type, var_num} |
                     Cmd::XorVarBy { var_type, var_num } => {
