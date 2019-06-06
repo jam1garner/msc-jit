@@ -154,11 +154,15 @@ impl Compilable for MscsbFile {
                             writer.set_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                         }
                     }
-                    Cmd::MultVarBy { var_type, var_num } | Cmd::DivVarBy { var_type, var_num } => {
+                    Cmd::MultVarBy { var_type, var_num } | Cmd::DivVarBy { var_type, var_num } |
+                    Cmd::ModVarBy { var_type, var_num } => {
                         writer.pop(Reg::RCX).ok()?;
                         let operation = match cmd.cmd {
-                            Cmd::MultVarBy { var_type: _, var_num: _ } => Mnemonic::MUL,
-                            Cmd::DivVarBy { var_type: _, var_num: _ } => Mnemonic::DIV,
+                            Cmd::MultVarBy { var_type: _, var_num: _ }
+                                => Mnemonic::IMUL,
+                            Cmd::DivVarBy { var_type: _, var_num: _ } |
+                            Cmd::ModVarBy { var_type: _, var_num: _ }
+                                => Mnemonic::IDIV,
                             _ => { unreachable!() }
                         };
                         if var_type == 0 {
@@ -172,29 +176,35 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                             writer.mov(
                                 (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
-                                Reg::EAX
+                                match cmd.cmd {
+                                    Cmd::ModVarBy { var_type: _, var_num: _ } => Reg::EDX,
+                                    _ => Reg::EAX
+                                },
                             ).ok()?;
                         } else {
                             writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
-                            if let Mnemonic::DIV = operation {
+                            if let Mnemonic::IDIV = operation {
                                 writer.mov(Reg::EDX, 0u32).unwrap();
                             }
                             writer.write1(
                                 operation,
                                 Operand::Direct(Reg::ECX)
                             ).unwrap();
+                            if let Cmd::ModVarBy { var_type: _, var_num: _ } = cmd.cmd {
+                                writer.mov(Reg::EAX, Reg::EDX).unwrap();
+                            }
                             writer.set_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                         }
                     }
-                    Cmd::MultI | Cmd::DivI => {
+                    Cmd::MultI | Cmd::DivI | Cmd::ModI => {
                         writer.pop(Reg::RCX).ok()?;
                         writer.pop(Reg::RAX).ok()?;
                         if cmd.push_bit {
                             let op = match cmd.cmd {
-                                Cmd::MultI => Mnemonic::MUL,
-                                Cmd::DivI => {
+                                Cmd::MultI => Mnemonic::IMUL,
+                                Cmd::DivI | Cmd::ModI => {
                                     writer.mov(Reg::EDX, 0u32).unwrap();
-                                    Mnemonic::DIV
+                                    Mnemonic::IDIV
                                 },
                                 _ => { unreachable!() }
                             };
@@ -202,7 +212,13 @@ impl Compilable for MscsbFile {
                                 op,
                                 Operand::Direct(Reg::ECX)
                             ).ok()?;
-                            writer.push(Reg::RAX).ok()?;
+                            writer.push(
+                                if let Cmd::ModI = cmd.cmd {
+                                    Reg::RDX
+                                } else {
+                                    Reg::RAX
+                                }
+                            ).ok()?;
                         }
                     }
                     Cmd::AddI | Cmd::SubI | Cmd::ShiftL | Cmd::ShiftR | Cmd::AndI | Cmd::OrI |
