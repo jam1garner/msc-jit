@@ -243,6 +243,44 @@ impl Compilable for MscsbFile {
                             writer.push(Reg::RAX).ok()?;
                         }
                     }
+                    Cmd::Equals | Cmd::NotEquals | Cmd::LessThan | Cmd::LessOrEqual |
+                    Cmd::Greater | Cmd::GreaterOrEqual => {
+                        writer.pop(Reg::RCX).ok()?;
+                        writer.pop(Reg::RAX).ok()?;
+                        if cmd.push_bit {
+                            writer.write2(
+                                Mnemonic::XOR,
+                                Operand::Direct(Reg::R8),
+                                Operand::Direct(Reg::R8)
+                            ).unwrap();
+                            writer.mov(Reg::EDX, 1u32).unwrap();
+                            writer.write2(
+                                Mnemonic::CMP,
+                                Operand::Direct(Reg::ECX),
+                                Operand::Direct(Reg::EAX)
+                            ).unwrap();
+                            let ops = match cmd.cmd {
+                                Cmd::Equals => (Mnemonic::CMOVE, Mnemonic::CMOVNE),
+                                Cmd::NotEquals => (Mnemonic::CMOVNE, Mnemonic::CMOVE),
+                                Cmd::LessThan => (Mnemonic::CMOVL, Mnemonic::CMOVGE),
+                                Cmd::LessOrEqual => (Mnemonic::CMOVLE, Mnemonic::CMOVG),
+                                Cmd::Greater => (Mnemonic::CMOVG, Mnemonic::CMOVLE),
+                                Cmd::GreaterOrEqual => (Mnemonic::CMOVGE, Mnemonic::CMOVL),
+                                _ => { unreachable!() }
+                            };
+                            writer.write2(
+                                ops.0,
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::EDX)
+                            ).unwrap();
+                            writer.write2(
+                                ops.1,
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::R8D)
+                            ).unwrap();
+                            writer.push(Reg::RAX).unwrap();
+                        }
+                    }
                     Cmd::NegI | Cmd::NotI => {
                         if cmd.push_bit {
                             writer.write1(
