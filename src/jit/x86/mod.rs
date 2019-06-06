@@ -121,7 +121,7 @@ impl Compilable for MscsbFile {
                     Cmd::AddVarBy { var_type, var_num } | Cmd::SubVarBy { var_type, var_num } |
                     Cmd::AndVarBy { var_type, var_num } | Cmd::OrVarBy {var_type, var_num} |
                     Cmd::XorVarBy { var_type, var_num } => {
-                        writer.pop(Reg::RAX).ok()?;
+                        writer.pop(Reg::RCX).ok()?;
                         let operation = match cmd.cmd {
                             Cmd::AddVarBy { var_type: _, var_num: _ } => Mnemonic::ADD,
                             Cmd::SubVarBy { var_type: _, var_num: _ } => Mnemonic::SUB,
@@ -145,28 +145,29 @@ impl Compilable for MscsbFile {
                                 Reg::ECX
                             ).ok()?;
                         } else {
-                            writer.get_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                            writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                             writer.write2(
                                 operation,
                                 Operand::Direct(Reg::EAX),
                                 Operand::Direct(Reg::ECX)
                             ).unwrap();
-                            writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
+                            writer.set_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                         }
                     }
                     Cmd::MultVarBy { var_type, var_num } | Cmd::DivVarBy { var_type, var_num } => {
                         writer.pop(Reg::RCX).ok()?;
+                        let operation = match cmd.cmd {
+                            Cmd::MultVarBy { var_type: _, var_num: _ } => Mnemonic::MUL,
+                            Cmd::DivVarBy { var_type: _, var_num: _ } => Mnemonic::DIV,
+                            _ => { unreachable!() }
+                        };
                         if var_type == 0 {
                             writer.mov(
                                 Reg::EAX,
                                 (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
                             ).ok()?;
                             writer.write1(
-                                match cmd.cmd {
-                                    Cmd::MultVarBy { var_type: _, var_num: _ } => Mnemonic::MUL,
-                                    Cmd::DivVarBy { var_type: _, var_num: _ } => Mnemonic::DIV,
-                                    _ => { unreachable!() }
-                                },
+                                operation,
                                 Operand::Direct(Reg::ECX),
                             ).unwrap();
                             writer.mov(
@@ -174,19 +175,31 @@ impl Compilable for MscsbFile {
                                 Reg::EAX
                             ).ok()?;
                         } else {
-                            
+                            writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
+                            if let Mnemonic::DIV = operation {
+                                writer.mov(Reg::EDX, 0u32).unwrap();
+                            }
+                            writer.write1(
+                                operation,
+                                Operand::Direct(Reg::ECX)
+                            ).unwrap();
+                            writer.set_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                         }
                     }
                     Cmd::MultI | Cmd::DivI => {
                         writer.pop(Reg::RCX).ok()?;
                         writer.pop(Reg::RAX).ok()?;
                         if cmd.push_bit {
-                            writer.write1(
-                                match cmd.cmd {
-                                    Cmd::MultI => Mnemonic::MUL,
-                                    Cmd::DivI => Mnemonic::DIV,
-                                    _ => { unreachable!() }
+                            let op = match cmd.cmd {
+                                Cmd::MultI => Mnemonic::MUL,
+                                Cmd::DivI => {
+                                    writer.mov(Reg::EDX, 0u32).unwrap();
+                                    Mnemonic::DIV
                                 },
+                                _ => { unreachable!() }
+                            };
+                            writer.write1(
+                                op,
                                 Operand::Direct(Reg::ECX)
                             ).ok()?;
                             writer.push(Reg::RAX).ok()?;
@@ -236,7 +249,7 @@ impl Compilable for MscsbFile {
                             Reg::RDI,
                             (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
                         ).ok()?;
-                        writer.mov(Reg::AX, 0u16).ok()?;
+                        writer.mov(Reg::EAX, 0u32).ok()?;
                         writer.mov(Reg::RCX, libc::printf as u64).ok()?;
                         writer.call(Reg::RCX).ok()?;
                         writer.pop(Reg::RDI).ok()?;
@@ -284,7 +297,7 @@ fn objdump(buffer: &Vec<u8>) {
         .output()
         .unwrap();
     std::fs::remove_file("/tmp/msc-jit-temp.bin").ok();
-    println!("{}", String::from_utf8_lossy(&output.stdout));
+    println!("{}\n", &String::from_utf8_lossy(&output.stdout).trim()[97..]);
 }
 
 impl CompiledProgram {

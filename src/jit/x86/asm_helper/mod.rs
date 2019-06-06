@@ -112,18 +112,18 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
     }
     
     fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError> {
-        self.mov(Reg::RAX, globals as u64)?;
+        self.mov(Reg::RDX, globals as u64)?;
         self.mov(
             reg,
-            (Reg::RAX, global_num as u64 * 4, OperandSize::Dword)
+            (Reg::RDX, global_num as u64 * 4, OperandSize::Dword)
         )?;
         Ok(())
     }
     
     fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError> {
-        self.mov(Reg::RAX, globals as u64)?;
+        self.mov(Reg::RDX, globals as u64)?;
         self.mov(
-            (Reg::RAX, global_num as u64 * 4, OperandSize::Dword),
+            (Reg::RDX, global_num as u64 * 4, OperandSize::Dword),
             reg
         )?;
         Ok(())
