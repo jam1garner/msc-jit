@@ -87,7 +87,7 @@ impl Compilable for MscsbFile {
                             writer.push(Reg::RAX).ok()?;
                         }
                     }
-                    Cmd::SetVar { var_type, var_num } => {
+                    Cmd::SetVar { var_type, var_num } | Cmd::VarSetF { var_type, var_num } => {
                         if var_type == 0 {
                             // Local var
                             writer.pop(Reg::RAX).ok()?;
@@ -293,6 +293,41 @@ impl Compilable for MscsbFile {
                             ).ok()?;
                         } else {
                             writer.pop(Reg::RAX).ok()?;
+                        }
+                    }
+                    Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF => {
+                        if cmd.push_bit {
+                            writer.copy_to_fpu(2).unwrap();
+                            writer.write2(
+                                match cmd.cmd {
+                                    Cmd::AddF => Mnemonic::FADD,
+                                    Cmd::SubF => Mnemonic::FSUB,
+                                    Cmd::MultF => Mnemonic::FMUL,
+                                    Cmd::DivF => Mnemonic::FDIV,
+                                    _ => { unreachable!() }
+                                },
+                                Operand::Direct(Reg::ST),
+                                Operand::Direct(Reg::ST1)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Literal8(0x8)
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::FSTP,
+                                (Reg::RSP, OperandSize::Dword).into_op()
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::FSTP,
+                                Operand::Direct(Reg::ST0)
+                            ).unwrap();
+                        } else {
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Literal8(0x10)
+                            ).unwrap();
                         }
                     }
                     Cmd::PrintF { arg_count } => {

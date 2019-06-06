@@ -15,6 +15,7 @@ pub trait AsmWriterHelper {
     fn call<I: IntoOperand>(&mut self, op1: I) -> Result<(), InstructionEncodingError>;
     fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
+    fn copy_to_fpu(&mut self, count: usize) -> Result<(), InstructionEncodingError>;
 }
 
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
@@ -126,6 +127,16 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
             (Reg::RDX, global_num as u64 * 4, OperandSize::Dword),
             reg
         )?;
+        Ok(())
+    }
+
+    fn copy_to_fpu(&mut self, count: usize) -> Result<(), InstructionEncodingError> {
+        for i in 1..count+1 {
+            self.write1(
+                Mnemonic::FLD,
+                (Reg::RSP, ((count - i) * 8) as u64, OperandSize::Dword).into_op()
+            )?;
+        }
         Ok(())
     }
 }
