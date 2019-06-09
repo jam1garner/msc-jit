@@ -4,7 +4,7 @@ use msc::{MscsbFile, Cmd, Script};
 use std::io::Cursor;
 use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
-use std::process::{Command, Stdio};
+use std::process::{Command};
 
 mod asm_helper;
 use asm_helper::*;
@@ -473,6 +473,10 @@ impl CompiledProgram {
             let ret = self.mem[self.entrypoint_index].run::<u64>();
             println!("Return value - 0x{:X}", ret);
         }
+    }
+
+    pub fn get_entrypoint_address(&self) -> u64 {
+        self.mem[self.entrypoint_index].contents as u64
     }
 }
 
