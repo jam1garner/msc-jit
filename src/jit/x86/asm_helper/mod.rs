@@ -16,8 +16,12 @@ pub trait AsmWriterHelper {
     fn get_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn set_global(&mut self, globals: *const u32, reg: Reg, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn copy_to_fpu(&mut self, count: usize) -> Result<(), InstructionEncodingError>;
+    fn copy_to_fpu_rev(&mut self, count: usize) -> Result<(), InstructionEncodingError>;
     fn get_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError>;
     fn set_global_float(&mut self, globals: *const u32, global_num: u16) -> Result<(), InstructionEncodingError>;
+    fn fstsw_ax(&mut self) -> Result<(), std::io::Error>;
+    fn sahf(&mut self) -> Result<(), std::io::Error>;
+    fn fcompp(&mut self) -> Result<(), std::io::Error>;
 }
 
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
@@ -157,6 +161,31 @@ impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
                 (Reg::RSP, ((count - i) * 8) as u64, OperandSize::Dword).into_op()
             )?;
         }
+        Ok(())
+    }
+
+    fn copy_to_fpu_rev(&mut self, count: usize) -> Result<(), InstructionEncodingError> {
+        for i in (1..count+1).rev() {
+            self.write1(
+                Mnemonic::FLD,
+                (Reg::RSP, ((count - i) * 8) as u64, OperandSize::Dword).into_op()
+            )?;
+        }
+        Ok(())
+    }
+
+    fn fstsw_ax(&mut self) -> Result<(), std::io::Error> {
+        self.write_bytes(b"\x9B\xDF\xE0")?;
+        Ok(())
+    }
+
+    fn sahf(&mut self) -> Result<(), std::io::Error> {
+        self.write_bytes(b"\x9e")?;
+        Ok(())
+    }
+
+    fn fcompp(&mut self) -> Result<(), std::io::Error> {
+        self.write_bytes(b"\xde\xd9")?;
         Ok(())
     }
 }

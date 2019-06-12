@@ -346,6 +346,44 @@ impl Compilable for MscsbFile {
                             writer.push(Reg::RAX).unwrap();
                         }
                     }
+                    Cmd::EqualsF | Cmd::NotEqualsF | Cmd::LessThanF | Cmd::LessOrEqualF |
+                    Cmd::GreaterF | Cmd::GreaterOrEqualF => {
+                        if cmd.push_bit {
+                            writer.copy_to_fpu_rev(2).ok()?;
+                            writer.mov(Reg::EDX, 1u32).unwrap();
+                            writer.fcompp().unwrap();
+                            writer.fstsw_ax().unwrap();
+                            writer.write0(
+                                Mnemonic::FWAIT
+                            ).unwrap();
+                            writer.sahf().unwrap();
+                            let ops = match cmd.cmd {
+                                Cmd::EqualsF => (Mnemonic::CMOVE, Mnemonic::CMOVNE),
+                                Cmd::NotEqualsF => (Mnemonic::CMOVNE, Mnemonic::CMOVE),
+                                Cmd::LessThanF => (Mnemonic::CMOVB, Mnemonic::CMOVAE),
+                                Cmd::LessOrEqualF => (Mnemonic::CMOVBE, Mnemonic::CMOVA),
+                                Cmd::GreaterF => (Mnemonic::CMOVA, Mnemonic::CMOVBE),
+                                Cmd::GreaterOrEqualF => (Mnemonic::CMOVAE, Mnemonic::CMOVB),
+                                _ => { unreachable!() }
+                            };
+                            writer.write2(
+                                ops.0,
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::EDX)
+                            ).unwrap();
+                            writer.write2(
+                                ops.1,
+                                Operand::Direct(Reg::EAX),
+                                Operand::Direct(Reg::R8D)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Literal8(16)
+                            ).unwrap();
+                            writer.push(Reg::RAX).unwrap();
+                        }
+                    }
                     Cmd::NegI | Cmd::NotI => {
                         if cmd.push_bit {
                             writer.write1(
