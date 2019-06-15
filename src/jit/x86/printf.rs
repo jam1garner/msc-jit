@@ -42,7 +42,7 @@ pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, ar
                             fmt as usize - specifier_start as usize
                         );
                         if let Ok(cstr) = CString::new(s) {
-                            libc::printf(cstr.as_ptr(), args[arg_i]);
+                            libc::printf(cstr.as_ptr(), args[argsc as usize - (arg_i as usize + 1)]);
                         }
                         arg_i += 1;
                     }
@@ -53,7 +53,7 @@ pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, ar
                             fmt as usize - specifier_start as usize
                         );
                         if let Ok(cstr) = CString::new(s) {
-                            let val = *(&args[arg_i] as *const u64 as *const f32);
+                            let val = *(&args[argsc as usize - (arg_i as usize + 1)] as *const u64 as *const f32);
                             libc::printf(cstr.as_ptr(), val as f64);
                         }
                         arg_i += 1;
