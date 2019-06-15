@@ -9,7 +9,7 @@ use std::process::{Command};
 mod asm_helper;
 use asm_helper::*;
 mod printf;
-use printf::printf;
+use printf::msc_printf;
 
 pub struct CompiledProgram {
     pub mem: Vec<JitMemory>,
@@ -442,7 +442,7 @@ impl Compilable for MscsbFile {
                             (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
                         ).ok()?;
                         writer.mov(Reg::EAX, 0u32).ok()?;
-                        writer.mov(Reg::RCX, libc::printf as u64).ok()?;
+                        writer.mov(Reg::RCX, msc_printf as u64).ok()?;
                         writer.call(Reg::RCX).ok()?;
                         writer.pop(Reg::RDI).ok()?;
                     }
