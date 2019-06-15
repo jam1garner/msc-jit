@@ -434,17 +434,25 @@ impl Compilable for MscsbFile {
                         }
                     }
                     Cmd::PrintF { arg_count } => {
+                        if arg_count == 0 {
+                            println!("WARNING: printf arg_count cannot be 0");
+                            continue;
+                        }
+                        writer.mov(Reg::RSI, Reg::RSP).ok()?;
+                        writer.write2(
+                            Mnemonic::ADD,
+                            Operand::Direct(Reg::RSP),
+                            Operand::Literal8(8 * (arg_count - 1))
+                        ).unwrap();
                         writer.pop(Reg::RAX).ok()?;
-                        writer.push(Reg::RDI).ok()?;
-                        writer.mov(Reg::RDI,string_offsets.as_ptr() as u64).ok()?;
+                        writer.mov(Reg::RDX, arg_count as u64 - 1 ).ok()?;
+                        writer.mov(Reg::RDI, string_offsets.as_ptr() as u64).ok()?;
                         writer.mov(
                             Reg::RDI,
                             (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
                         ).ok()?;
-                        writer.mov(Reg::EAX, 0u32).ok()?;
                         writer.mov(Reg::RCX, msc_printf as u64).ok()?;
                         writer.call(Reg::RCX).ok()?;
-                        writer.pop(Reg::RDI).ok()?;
                     }
                     Cmd::Return6 | Cmd::Return8 => {
                         writer.pop(Reg::RAX).ok()?;
