@@ -57,18 +57,28 @@ impl Compilable for MscsbFile {
         ).collect::<Vec<*const c_void>>();
 
         let mut ret_val_locations = HashSet::new();
-        //let mut jump_relocations = vec![];
-        //let mut command_locations = HashMap::new();
+        let mut jump_relocations = vec![];
+        let mut command_locations = HashMap::new();
         // Setup stack frame and whatnot
+        println!("{:#?}", self.scripts[0]);
         if let Some((_, var_count)) = get_var_info(&self.scripts[0]) {
             writer.setup_stack_frame(var_count as u32).ok()?;
             for cmd in self.scripts[0].iter().skip(1) {
                 if ret_val_locations.contains(&cmd.position) {
                     writer.push(Reg::EAX);
                 }
+                let command_asm_pos = writer.get_inner_writer_ref().position();
+                command_locations.insert(&cmd.position, command_asm_pos);
                 match cmd.cmd {
                     Cmd::Begin { arg_count: _, var_count: _ } => {
                         panic!("Begin not allowed after first command of script");
+                    }
+                    Cmd::Jump { loc } | Cmd::Jump5 { loc } | Cmd::Else { loc } => {
+                        writer.write1(
+                            Mnemonic::JMP,
+                            Operand::Literal32(0)
+                        ).unwrap();
+                        jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - 0x10));
                     }
                     Cmd::PushShort { val } => {
                         if cmd.push_bit {
@@ -470,16 +480,31 @@ impl Compilable for MscsbFile {
                         writer.pop(Reg::RAX).ok()?;
                         writer.write_ret(var_count as u32).ok()?;
                     }
-                    Cmd::Return7 | Cmd::Return9 => {
+                    Cmd::Return7 | Cmd::Return9 | Cmd::End => {
                         writer.write_ret(var_count as u32).ok()?;
                     }
-                    Cmd::Nop | Cmd::End => {}
+                    Cmd::Nop => {
+
+                    }
                     _ => {
                         println!("{:?} not recognized", cmd);
                     }
                 }
             }
             writer.write_ret(var_count as u32).ok()?;
+            println!("{:#?}", command_locations);
+            for relocation in jump_relocations {
+                writer.seek(relocation.0);
+                println!("{:?}", relocation);
+                writer.write1(
+                    relocation.1,
+                    Operand::Literal32(
+                        (*command_locations.get(&relocation.2).unwrap() as i64
+                         - relocation.0 as i64)
+                        as u32
+                    )
+                ).unwrap();
+            }
         } else {
             writer.write0(Mnemonic::RET).ok()?;
         }

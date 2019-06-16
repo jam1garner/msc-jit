@@ -27,7 +27,7 @@ pub trait AsmWriterHelper {
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
                                     Reg::R12, Reg::R13, Reg::R14, Reg::R15];
 
-impl<T: Write> AsmWriterHelper for InstructionWriter<T> {
+impl<T: Write + Seek> AsmWriterHelper for InstructionWriter<T> {
     fn write_ret(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError> {
         self.write2(
             Mnemonic::MOV,

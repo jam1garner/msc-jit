@@ -4,11 +4,8 @@ extern crate x86asm;
 mod jit;
 
 use jit::x86::*;
-use std::thread;
 use std::io::prelude::*;
 use std::io::{self, BufRead};
-use std::time::Duration;
-use std::process::{Command, Stdio};
 
 fn gdb(address: u64) {
     std::fs::File::create("/tmp/msc-jit-temp.txt").unwrap()
