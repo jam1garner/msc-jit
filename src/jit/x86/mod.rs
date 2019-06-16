@@ -5,6 +5,7 @@ use std::io::Cursor;
 use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
 use std::process::{Command};
+use std::collections::{HashSet, HashMap};
 
 mod asm_helper;
 use asm_helper::*;
@@ -55,10 +56,16 @@ impl Compilable for MscsbFile {
             }
         ).collect::<Vec<*const c_void>>();
 
+        let mut ret_val_locations = HashSet::new();
+        //let mut jump_relocations = vec![];
+        //let mut command_locations = HashMap::new();
         // Setup stack frame and whatnot
         if let Some((_, var_count)) = get_var_info(&self.scripts[0]) {
             writer.setup_stack_frame(var_count as u32).ok()?;
             for cmd in self.scripts[0].iter().skip(1) {
+                if ret_val_locations.contains(&cmd.position) {
+                    writer.push(Reg::EAX);
+                }
                 match cmd.cmd {
                     Cmd::Begin { arg_count: _, var_count: _ } => {
                         panic!("Begin not allowed after first command of script");
@@ -453,6 +460,11 @@ impl Compilable for MscsbFile {
                         ).ok()?;
                         writer.mov(Reg::RCX, msc_printf as u64).ok()?;
                         writer.call(Reg::RCX).ok()?;
+                    }
+                    Cmd::Try { loc } => {
+                        if cmd.push_bit {
+                            ret_val_locations.insert(loc);
+                        }
                     }
                     Cmd::Return6 | Cmd::Return8 => {
                         writer.pop(Reg::RAX).ok()?;
