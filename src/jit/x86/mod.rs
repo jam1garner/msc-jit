@@ -65,7 +65,7 @@ impl Compilable for MscsbFile {
             writer.setup_stack_frame(var_count as u32).ok()?;
             for cmd in self.scripts[0].iter().skip(1) {
                 if ret_val_locations.contains(&cmd.position) {
-                    writer.push(Reg::EAX);
+                    writer.push(Reg::EAX).ok()?;
                 }
                 let command_asm_pos = writer.get_inner_writer_ref().position();
                 command_locations.insert(&cmd.position, command_asm_pos);
@@ -491,7 +491,7 @@ impl Compilable for MscsbFile {
                     }
                 }
             }
-            writer.write_ret(var_count as u32).ok()?;
+            //writer.write_ret(var_count as u32).ok()?;
             println!("{:#?}", command_locations);
             for relocation in jump_relocations {
                 writer.seek(relocation.0);
@@ -500,7 +500,7 @@ impl Compilable for MscsbFile {
                     relocation.1,
                     Operand::Literal32(
                         (*command_locations.get(&relocation.2).unwrap() as i64
-                         - relocation.0 as i64)
+                         - (relocation.0 + 5) as i64)
                         as u32
                     )
                 ).unwrap();
@@ -554,6 +554,8 @@ impl CompiledProgram {
         }
         unsafe {
             let ret = self.mem[self.entrypoint_index].run::<u64>();
+            // Flush printf buffer
+            libc::printf("\n\0".as_ptr() as _);
             println!("Return value - 0x{:X}", ret);
         }
     }
