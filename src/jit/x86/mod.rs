@@ -560,6 +560,17 @@ impl Compilable for MscsbFile {
                     Cmd::Return7 | Cmd::Return9 | Cmd::End => {
                         writer.write_ret(var_count as u32).ok()?;
                     }
+                    Cmd::Exit => {
+                        writer.mov(Reg::EAX, 60u32).unwrap();
+                        writer.write2(
+                            Mnemonic::XOR,
+                            Operand::Direct(Reg::EDI),
+                            Operand::Direct(Reg::EDI)
+                        ).unwrap();
+                        writer.write0(
+                            Mnemonic::SYSCALL
+                        ).unwrap();
+                    }
                     Cmd::Nop => {}
                     _ => {
                         println!("{:?} not recognized", cmd);
