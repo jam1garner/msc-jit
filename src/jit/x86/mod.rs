@@ -433,6 +433,32 @@ impl Compilable for MscsbFile {
                             writer.pop(Reg::RAX).ok()?;
                         }
                     }
+                    Cmd::Not => {
+                        writer.pop(Reg::RAX).ok()?;
+                        if cmd.push_bit {
+                            writer.write2(
+                                Mnemonic::XOR,
+                                Operand::Direct(Reg::R8),
+                                Operand::Direct(Reg::R8)
+                            ).unwrap();
+                            writer.mov(Reg::EDX, 1u32).unwrap();
+                            writer.write2(
+                                Mnemonic::TEST,
+                                Operand::Direct(Reg::RAX),
+                                Operand::Direct(Reg::RAX)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::CMOVE,
+                                Operand::Direct(Reg::RAX),
+                                Operand::Direct(Reg::RDX)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::CMOVNZ,
+                                Operand::Direct(Reg::RAX),
+                                Operand::Direct(Reg::R8)
+                            ).unwrap();
+                        }
+                    }
                     Cmd::AddF | Cmd::SubF | Cmd::MultF | Cmd::DivF => {
                         if cmd.push_bit {
                             writer.copy_to_fpu(2).unwrap();
