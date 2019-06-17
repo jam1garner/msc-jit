@@ -89,9 +89,9 @@ impl Compilable for MscsbFile {
                         ).unwrap();
                         let command_asm_pos = writer.get_inner_writer_ref().position();
                         let mnem = if let Cmd::If { loc: _ } = cmd.cmd {
-                            Mnemonic::JNE
-                        } else {
                             Mnemonic::JE
+                        } else {
+                            Mnemonic::JNE
                         };
                         writer.write1(
                             mnem,
