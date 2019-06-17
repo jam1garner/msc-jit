@@ -60,7 +60,6 @@ impl Compilable for MscsbFile {
         let mut jump_relocations = vec![];
         let mut command_locations = HashMap::new();
         // Setup stack frame and whatnot
-        println!("{:#?}", self.scripts[0]);
         if let Some((_, var_count)) = get_var_info(&self.scripts[0]) {
             writer.setup_stack_frame(var_count as u32).ok()?;
             for cmd in self.scripts[0].iter().skip(1) {
@@ -509,10 +508,8 @@ impl Compilable for MscsbFile {
                 }
             }
             //writer.write_ret(var_count as u32).ok()?;
-            println!("{:#?}", command_locations);
             for relocation in jump_relocations {
                 writer.seek(relocation.0);
-                println!("{:?}", relocation);
                 writer.write1(
                     relocation.1,
                     Operand::Literal32(
