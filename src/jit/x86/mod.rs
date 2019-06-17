@@ -108,6 +108,39 @@ impl Compilable for MscsbFile {
                             writer.push(val).ok()?;
                         }
                     }
+                    Cmd::IntToFloat { stack_pos } => {
+                        writer.write1(
+                            Mnemonic::FILD,
+                            (Reg::RSP, stack_pos as u64 * 8, OperandSize::Dword).into_op()
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::FSTP,
+                            (Reg::RSP, stack_pos as u64 * 8, OperandSize::Dword).into_op()
+                        ).unwrap();
+                    }
+                    Cmd::FloatToInt { stack_pos } => {
+                        writer.write1(
+                            Mnemonic::FSTCW,
+                            (Reg::RSP, -2i64 as u64, OperandSize::Word).into_op()
+                        ).unwrap();
+                        writer.write2(
+                            Mnemonic::OR,
+                            (Reg::RSP, -2i64 as u64, OperandSize::Word).into_op(),
+                            Operand::Literal16(0xc00)
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::FLDCW,
+                            (Reg::RSP, -2i64 as u64, OperandSize::Word).into_op()
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::FLD,
+                            (Reg::RSP, stack_pos as u64 * 8, OperandSize::Dword).into_op()
+                        ).unwrap();
+                        writer.write1(
+                            Mnemonic::FISTP,
+                            (Reg::RSP, stack_pos as u64 * 8, OperandSize::Dword).into_op()
+                        ).unwrap();
+                    }
                     Cmd::PushVar { var_type, var_num } => {
                         if var_type == 0 {
                             // Local variable
