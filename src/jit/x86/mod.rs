@@ -346,8 +346,8 @@ impl Compilable for MscsbFile {
                     }
                     Cmd::Equals | Cmd::NotEquals | Cmd::LessThan | Cmd::LessOrEqual |
                     Cmd::Greater | Cmd::GreaterOrEqual => {
-                        writer.pop(Reg::RCX).ok()?;
                         writer.pop(Reg::RAX).ok()?;
+                        writer.pop(Reg::RCX).ok()?;
                         if cmd.push_bit {
                             writer.write2(
                                 Mnemonic::XOR,
