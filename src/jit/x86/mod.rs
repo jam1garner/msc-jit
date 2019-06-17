@@ -80,6 +80,25 @@ impl Compilable for MscsbFile {
                         ).unwrap();
                         jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - 0x10));
                     }
+                    Cmd::If { loc } | Cmd::IfNot { loc } => {
+                        writer.pop(Reg::RAX).ok()?;
+                        writer.write2(
+                            Mnemonic::CMP,
+                            Operand::Direct(Reg::RAX),
+                            Operand::Literal8(0)
+                        ).unwrap();
+                        let command_asm_pos = writer.get_inner_writer_ref().position();
+                        let mnem = if let Cmd::If { loc: _ } = cmd.cmd {
+                            Mnemonic::JNE
+                        } else {
+                            Mnemonic::JE
+                        };
+                        writer.write1(
+                            mnem,
+                            Operand::Literal32(0)
+                        ).unwrap();
+                        jump_relocations.push((command_asm_pos, mnem, loc - 0x10));
+                    }
                     Cmd::PushShort { val } => {
                         if cmd.push_bit {
                             writer.push(val as u32).ok()?;
@@ -483,9 +502,7 @@ impl Compilable for MscsbFile {
                     Cmd::Return7 | Cmd::Return9 | Cmd::End => {
                         writer.write_ret(var_count as u32).ok()?;
                     }
-                    Cmd::Nop => {
-
-                    }
+                    Cmd::Nop => {}
                     _ => {
                         println!("{:?} not recognized", cmd);
                     }
@@ -500,7 +517,13 @@ impl Compilable for MscsbFile {
                     relocation.1,
                     Operand::Literal32(
                         (*command_locations.get(&relocation.2).unwrap() as i64
-                         - (relocation.0 + 5) as i64)
+                         - relocation.0 as i64
+                         - match relocation.1 {
+                            Mnemonic::JMP => 5,
+                            Mnemonic::JE => 6,
+                            Mnemonic::JNE => 6,
+                            _ => { unreachable!() }
+                         })
                         as u32
                     )
                 ).unwrap();

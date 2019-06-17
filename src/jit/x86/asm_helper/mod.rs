@@ -29,6 +29,7 @@ static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
 
 impl<T: Write + Seek> AsmWriterHelper for InstructionWriter<T> {
     fn write_ret(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError> {
+        let num_vars = num_vars + ((4 - (num_vars % 4)) % 4);
         self.write2(
             Mnemonic::MOV,
             Operand::Direct(Reg::RSP),
@@ -52,6 +53,7 @@ impl<T: Write + Seek> AsmWriterHelper for InstructionWriter<T> {
     }
 
     fn setup_stack_frame(&mut self, num_vars: u32) -> Result<(), InstructionEncodingError> {
+        let num_vars = num_vars + ((4 - (num_vars % 4)) % 4);
         self.write1(
             Mnemonic::PUSH,
             Operand::Direct(Reg::RBP)
