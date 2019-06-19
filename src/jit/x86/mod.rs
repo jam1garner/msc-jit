@@ -1,7 +1,7 @@
 use std::io::prelude::*;
 use super::{JitMemory, PAGE_SIZE};
 use msc::{MscsbFile, Cmd, Script};
-use std::io::Cursor;
+use std::io::{Cursor, SeekFrom};
 use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
 use std::process::{Command};
@@ -36,6 +36,10 @@ fn get_var_info(script: &Script) -> Option<(u16, u16)> {
     }
 }
 
+static ARG_REGS: [Reg; 6] = [
+    Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg::R9
+];
+
 impl Compilable for MscsbFile {
     fn compile(&self) -> Option<CompiledProgram> {
         let global_vars = vec![0; 0x100];
@@ -55,7 +59,9 @@ impl Compilable for MscsbFile {
         ).collect::<Vec<*const c_void>>();
 
         let mut mem = vec![];
+        let mut call_relocs = vec![];
         for script_index in 0..self.scripts.len() {
+            let mut last_cmd_pushint: Option<u32> = None;
             let mut ret_val_locations = HashSet::new();
             let mut jump_relocations = vec![];
             let mut command_locations = HashMap::new();
@@ -65,8 +71,8 @@ impl Compilable for MscsbFile {
             if let Some((_, var_count)) = get_var_info(&self.scripts[script_index]) {
                 writer.setup_stack_frame(var_count as u32).ok()?;
                 for cmd in self.scripts[script_index].iter().skip(1) {
-                    if ret_val_locations.contains(&cmd.position) {
-                        writer.push(Reg::EAX).ok()?;
+                    if ret_val_locations.contains(&(cmd.position + self.scripts[script_index].bounds.0)) {
+                        writer.push(Reg::RAX).ok()?;
                     }
                     let command_asm_pos = writer.get_inner_writer_ref().position();
                     command_locations.insert(&cmd.position, command_asm_pos);
@@ -79,7 +85,7 @@ impl Compilable for MscsbFile {
                                 Mnemonic::JMP,
                                 Operand::Literal32(0)
                             ).unwrap();
-                            jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - 0x10));
+                            jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - self.scripts[script_index].bounds.0));
                         }
                         Cmd::If { loc } | Cmd::IfNot { loc } => {
                             writer.pop(Reg::RAX).ok()?;
@@ -98,7 +104,25 @@ impl Compilable for MscsbFile {
                                 mnem,
                                 Operand::Literal32(0)
                             ).unwrap();
-                            jump_relocations.push((command_asm_pos, mnem, loc - 0x10));
+                            jump_relocations.push((command_asm_pos, mnem, loc - self.scripts[script_index].bounds.0));
+                        }
+                        Cmd::CallFunc { arg_count } | Cmd::CallFunc2 { arg_count } |
+                        Cmd::CallFunc3 { arg_count } => {
+                            for i in 0..arg_count {
+                                writer.pop(ARG_REGS[(arg_count - (i + 1)) as usize]).unwrap();
+                            }
+                            if let Some(i) = last_cmd_pushint {
+                                writer.seek(SeekFrom::Current(-5)).unwrap();
+                                let command_asm_pos = writer.get_inner_writer_ref().position();
+                                command_locations.insert(&cmd.position, command_asm_pos);
+                                call_relocs.push((script_index, command_asm_pos, i));
+                                writer.mov(Reg::RDI, 0u64).unwrap();
+                                writer.call(Reg::RDI).ok()?;
+                            } else {
+                                // Dynamically find function pointer
+                                // (and cry at the performance impact)
+                                panic!("Dynamic function calls not supported");
+                            }
                         }
                         Cmd::PushShort { val } => {
                             if cmd.push_bit {
@@ -578,10 +602,21 @@ impl Compilable for MscsbFile {
                             println!("{:?} not recognized", cmd);
                         }
                     }
+                    last_cmd_pushint = match cmd.cmd {
+                        Cmd::PushInt { val } => {
+                            Some(val)
+                        }
+                        Cmd::PushShort { val } => {
+                            Some(val as u32)
+                        }
+                        _ => {
+                            None
+                        }
+                    };
                 }
                 //writer.write_ret(var_count as u32).ok()?;
                 for relocation in jump_relocations {
-                    writer.seek(relocation.0);
+                    writer.seek(SeekFrom::Start(relocation.0)).unwrap();
                     writer.write1(
                         relocation.1,
                         Operand::Literal32(
@@ -610,10 +645,19 @@ impl Compilable for MscsbFile {
             mem.push(code);
         }
 
+        for (script_index, pos, script_offset) in call_relocs {
+            let call_addr = mem[self.get_script_from_loc(script_offset).unwrap()].contents as u64;
+            unsafe {
+                *(mem[script_index].contents.offset(pos as isize + 2) as *mut u64) = call_addr;
+            }
+        }
+
+        let entrypoint_index = self.get_script_from_loc(self.entrypoint)?;
+
         //println!("{}", buffer.iter().map(|b| format!("{:02X}", b)).collect::<Vec<String>>().join(" "));
         println!("\n\n\n");
         Some(CompiledProgram {
-            mem, entrypoint_index: 0,
+            mem, entrypoint_index,
             string_section, string_offsets, global_vars
         })
     }
