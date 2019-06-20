@@ -39,6 +39,9 @@ fn get_var_info(script: &Script) -> Option<(u16, u16)> {
 static ARG_REGS: [Reg; 6] = [
     Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg::R9
 ];
+static ARG_REGS_32: [Reg; 6] = [
+    Reg::EDI, Reg::ESI, Reg::EDX, Reg::ECX, Reg::R8D, Reg::R9D
+];
 
 impl Compilable for MscsbFile {
     fn compile(&self) -> Option<CompiledProgram> {
@@ -68,8 +71,14 @@ impl Compilable for MscsbFile {
             // Setup stack frame and whatnot
             let buffer = Cursor::new(Vec::new());
             let mut writer = InstructionWriter::new(buffer, Mode::Long);
-            if let Some((_, var_count)) = get_var_info(&self.scripts[script_index]) {
+            if let Some((arg_count, var_count)) = get_var_info(&self.scripts[script_index]) {
                 writer.setup_stack_frame(var_count as u32).ok()?;
+                for i in 0..arg_count {
+                    writer.mov(
+                        (Reg::RBP, i as u64 * 4, OperandSize::Dword),
+                        ARG_REGS_32[i as usize]
+                    ).unwrap();
+                }
                 for cmd in self.scripts[script_index].iter().skip(1) {
                     if ret_val_locations.contains(&(cmd.position + self.scripts[script_index].bounds.0)) {
                         writer.push(Reg::RAX).ok()?;
@@ -108,16 +117,16 @@ impl Compilable for MscsbFile {
                         }
                         Cmd::CallFunc { arg_count } | Cmd::CallFunc2 { arg_count } |
                         Cmd::CallFunc3 { arg_count } => {
-                            for i in 0..arg_count {
-                                writer.pop(ARG_REGS[(arg_count - (i + 1)) as usize]).unwrap();
-                            }
                             if let Some(i) = last_cmd_pushint {
                                 writer.seek(SeekFrom::Current(-5)).unwrap();
                                 let command_asm_pos = writer.get_inner_writer_ref().position();
                                 command_locations.insert(&cmd.position, command_asm_pos);
                                 call_relocs.push((script_index, command_asm_pos, i));
-                                writer.mov(Reg::RDI, 0u64).unwrap();
-                                writer.call(Reg::RDI).ok()?;
+                                writer.mov_rax_0().unwrap();
+                                for i in 0..arg_count {
+                                    writer.pop(ARG_REGS[(arg_count - (i + 1)) as usize]).unwrap();
+                                }
+                                writer.call(Reg::RAX).ok()?;
                             } else {
                                 // Dynamically find function pointer
                                 // (and cry at the performance impact)
@@ -636,12 +645,12 @@ impl Compilable for MscsbFile {
                 writer.write0(Mnemonic::RET).ok()?;
             }
             let buffer = writer.get_inner_writer_ref().get_ref();
+            println!("\n\nEmitted asm:");
+            objdump(&buffer);
             let mut code = JitMemory::new((buffer.len() + (PAGE_SIZE - 1)) / PAGE_SIZE);
             unsafe {
                 &code.as_slice()[..buffer.len()].copy_from_slice(&buffer[..]);
             }
-            println!("\n\nEmitted asm:");
-            objdump(buffer);
             mem.push(code);
         }
 
@@ -651,6 +660,14 @@ impl Compilable for MscsbFile {
                 *(mem[script_index].contents.offset(pos as isize + 2) as *mut u64) = call_addr;
             }
         }
+        
+        //println!("\n\nEmitted asm:");
+        
+        /*for i in 0..mem.len() {
+            unsafe {
+                objdump(std::slice::from_raw_parts(mem[i].contents, mem[i].size));
+            }
+        }*/
 
         let entrypoint_index = self.get_script_from_loc(self.entrypoint)?;
 
@@ -663,7 +680,7 @@ impl Compilable for MscsbFile {
     }
 }
 
-fn objdump(buffer: &Vec<u8>) {
+fn objdump(buffer: &[u8]) {
     std::fs::File::create("/tmp/msc-jit-temp.bin").unwrap()
         .write_all(buffer).unwrap();
     // objdump -D -b binary -mi386 -Maddr16,data16,x86-64,intel /dev/stdin

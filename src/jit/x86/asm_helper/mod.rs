@@ -22,6 +22,7 @@ pub trait AsmWriterHelper {
     fn fstsw_ax(&mut self) -> Result<(), std::io::Error>;
     fn sahf(&mut self) -> Result<(), std::io::Error>;
     fn fcompp(&mut self) -> Result<(), std::io::Error>;
+    fn mov_rax_0(&mut self) -> Result<(), std::io::Error>;
 }
 
 static NONVOLATILE_REGS: &[Reg] = &[Reg::RBX, Reg::RBP, Reg::RDI, Reg::RSI,
@@ -188,6 +189,11 @@ impl<T: Write + Seek> AsmWriterHelper for InstructionWriter<T> {
 
     fn fcompp(&mut self) -> Result<(), std::io::Error> {
         self.write_bytes(b"\xde\xd9")?;
+        Ok(())
+    }
+
+    fn mov_rax_0(&mut self) -> Result<(), std::io::Error> {
+        self.write_bytes(b"\x48\xb8\xf8\xff\xff\xff\xff\xff\xff\xf8")?;
         Ok(())
     }
 }
