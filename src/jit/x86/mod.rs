@@ -99,6 +99,22 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                             jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - self.scripts[script_index].bounds.0));
                         }
+                        Cmd::Push => {
+                            if cmd.push_bit {
+                                writer.pop(Reg::RAX).unwrap();
+                                writer.push(Reg::RAX).unwrap();
+                                writer.push(Reg::RAX).unwrap();
+                            }
+                        }
+                        Cmd::Pop => {
+                            if !cmd.push_bit {
+                                writer.write2(
+                                    Mnemonic::ADD,
+                                    Operand::Direct(Reg::RSP),
+                                    Operand::Literal8(8)
+                                ).unwrap();
+                            }
+                        }
                         Cmd::If { loc } | Cmd::IfNot { loc } => {
                             writer.pop(Reg::RAX).ok()?;
                             writer.write2(
