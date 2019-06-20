@@ -86,6 +86,9 @@ impl Compilable for MscsbFile {
                     let command_asm_pos = writer.get_inner_writer_ref().position();
                     command_locations.insert(&cmd.position, command_asm_pos);
                     match cmd.cmd {
+                        Cmd::Unk1 | Cmd::ErrorC | Cmd::Push | Cmd::Pop | Cmd::Error37 | Cmd::Error4C => {
+                            panic!("Unsupported command {:?}", cmd.cmd);
+                        }
                         Cmd::Begin { arg_count: _, var_count: _ } => {
                             panic!("Begin not allowed after first command of script");
                         }
@@ -500,6 +503,16 @@ impl Compilable for MscsbFile {
                             } else {
                                 writer.pop(Reg::RAX).ok()?;
                             }
+                        }
+                        Cmd::NegF => {
+                            writer.copy_to_fpu(1).unwrap();
+                            writer.write0(
+                                Mnemonic::FCHS
+                            ).unwrap();
+                            writer.write1(
+                                Mnemonic::FSTP,
+                                (Reg::RSP, OperandSize::Dword).into_op()
+                            ).unwrap();
                         }
                         Cmd::Not => {
                             writer.pop(Reg::RAX).ok()?;
