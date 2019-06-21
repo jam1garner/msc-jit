@@ -86,7 +86,7 @@ impl Compilable for MscsbFile {
                     let command_asm_pos = writer.get_inner_writer_ref().position();
                     command_locations.insert(&cmd.position, command_asm_pos);
                     match cmd.cmd {
-                        Cmd::Unk1 | Cmd::ErrorC | Cmd::Push | Cmd::Pop | Cmd::Error37 | Cmd::Error4C => {
+                        Cmd::Unk1 | Cmd::ErrorC | Cmd::Error37 | Cmd::Error4C => {
                             panic!("Unsupported command {:?}", cmd.cmd);
                         }
                         Cmd::Begin { arg_count: _, var_count: _ } => {
@@ -597,11 +597,13 @@ impl Compilable for MscsbFile {
                                 continue;
                             }
                             writer.mov(Reg::RSI, Reg::RSP).ok()?;
-                            writer.write2(
-                                Mnemonic::ADD,
-                                Operand::Direct(Reg::RSP),
-                                Operand::Literal8(8 * (arg_count - 1))
-                            ).unwrap();
+                            if arg_count > 1 {
+                                writer.write2(
+                                    Mnemonic::ADD,
+                                    Operand::Direct(Reg::RSP),
+                                    Operand::Literal8(8 * (arg_count - 1))
+                                ).unwrap();
+                            }
                             writer.pop(Reg::RAX).ok()?;
                             writer.mov(Reg::RDX, arg_count as u64 - 1 ).ok()?;
                             writer.mov(Reg::RDI, string_offsets.as_ptr() as u64).ok()?;

@@ -1,5 +1,5 @@
 use std::io::prelude::*;
-use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
+use x86asm::{OperandSize, InstructionEncodingError, InstructionWriter, Mnemonic, Operand, Reg};
 
 mod into_operand;
 pub use into_operand::*;
