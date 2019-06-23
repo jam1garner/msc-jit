@@ -639,14 +639,7 @@ impl Compilable for MscsbFile {
                                 continue;
                             }
                             writer.mov(Reg::RSI, Reg::RSP).ok()?;
-                            if arg_count > 1 {
-                                writer.write2(
-                                    Mnemonic::ADD,
-                                    Operand::Direct(Reg::RSP),
-                                    Operand::Literal8(8 * (arg_count - 1))
-                                ).unwrap();
-                            }
-                            writer.pop(Reg::RAX).ok()?;
+                            writer.mov(Reg::RAX, (Reg::RSP, 8 * (arg_count as u64 - 1), OperandSize::Qword)).ok()?;
                             writer.mov(Reg::RDX, arg_count as u64 - 1 ).ok()?;
                             writer.mov(Reg::RDI, string_offsets.as_ptr() as u64).ok()?;
                             writer.mov(
@@ -654,7 +647,30 @@ impl Compilable for MscsbFile {
                                 (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
                             ).ok()?;
                             writer.mov(Reg::RCX, msc_printf as u64).ok()?;
+                            writer.push(Reg::R15).unwrap();
+                            writer.mov(Reg::R15, Reg::RSP).unwrap();
+                            writer.write2(
+                                Mnemonic::AND,
+                                Operand::Direct(Reg::R15),
+                                Operand::Literal8(0x8)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::SUB,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Direct(Reg::R15)
+                            ).unwrap();
                             writer.call(Reg::RCX).ok()?;
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Direct(Reg::R15)
+                            ).unwrap();
+                            writer.pop(Reg::R15).unwrap();
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Literal8(8 * arg_count)
+                            ).unwrap();
                         }
                         Cmd::Try { loc } => {
                             if cmd.push_bit {
