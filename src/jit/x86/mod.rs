@@ -2,7 +2,7 @@ use std::io::prelude::*;
 use super::{JitMemory, PAGE_SIZE};
 use msc::{MscsbFile, Cmd, Script};
 use std::io::{Cursor, SeekFrom};
-use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
+use x86asm::{OperandSize, RegScale, InstructionWriter, Mnemonic, Mode, Operand, Reg};
 use libc::c_void;
 use std::process::{Command};
 use std::collections::{HashSet, HashMap};
@@ -73,10 +73,20 @@ impl Compilable for MscsbFile {
             let mut writer = InstructionWriter::new(buffer, Mode::Long);
             if let Some((arg_count, var_count)) = get_var_info(&self.scripts[script_index]) {
                 writer.setup_stack_frame(var_count as u32).ok()?;
-                for i in 0..arg_count {
+                for i in 0..std::cmp::min(arg_count, 6) {
                     writer.mov(
                         (Reg::RBP, i as u64 * 4, OperandSize::Dword),
                         ARG_REGS_32[i as usize]
+                    ).unwrap();
+                }
+                for i in 0..arg_count as isize - 6 {
+                    writer.mov(
+                        Reg::EAX,
+                        (Reg::RSP, (i as u64 * 8) + 16 + (var_count + ((4 - (var_count % 4)) % 4)) as u64 * 4, OperandSize::Dword),
+                    ).unwrap();
+                    writer.mov(
+                        (Reg::RBP, (i as u64 + 6) * 4, OperandSize::Dword),
+                        Reg::EAX
                     ).unwrap();
                 }
                 for cmd in self.scripts[script_index].iter().skip(1) {
@@ -138,14 +148,46 @@ impl Compilable for MscsbFile {
                         Cmd::CallFunc3 { arg_count } => {
                             if let Some(i) = last_cmd_pushint {
                                 writer.seek(SeekFrom::Current(-5)).unwrap();
+                                if arg_count > 6 {
+                                    writer.write2(
+                                        Mnemonic::ADD,
+                                        Operand::Direct(Reg::RSP),
+                                        Operand::Literal8((arg_count - 6) * 8)
+                                    ).unwrap();
+                                }
+                                let arg_reg_count = std::cmp::min(arg_count, 6);
+                                for i in 0..arg_reg_count {
+                                    writer.pop(ARG_REGS[(arg_reg_count - (i + 1)) as usize]).unwrap();
+                                }
+                                if arg_count > 6 {
+                                    writer.write2(
+                                        Mnemonic::SUB,
+                                        Operand::Direct(Reg::RSP),
+                                        Operand::Literal8((arg_count - 6) * 8)
+                                    ).unwrap();
+                                    for i in 0..(arg_count - arg_reg_count) {
+                                        writer.mov(
+                                            Reg::RAX,
+                                            (Reg::RSP, (i as u64 * 8) + (-0x30i64 as u64), OperandSize::Qword)
+                                        ).unwrap();
+                                        writer.mov(
+                                            (Reg::RSP, (i as u64 * 8), OperandSize::Qword),
+                                            Reg::RAX
+                                        ).unwrap();
+                                    }
+                                }
                                 let command_asm_pos = writer.get_inner_writer_ref().position();
                                 command_locations.insert(&cmd.position, command_asm_pos);
                                 call_relocs.push((script_index, command_asm_pos, i));
                                 writer.mov_rax_0().unwrap();
-                                for i in 0..arg_count {
-                                    writer.pop(ARG_REGS[(arg_count - (i + 1)) as usize]).unwrap();
-                                }
                                 writer.call(Reg::RAX).ok()?;
+                                if arg_count > 6 {
+                                    writer.write2(
+                                        Mnemonic::ADD,
+                                        Operand::Direct(Reg::RSP),
+                                        Operand::Literal8((arg_count - 6) * 8)
+                                    ).unwrap();
+                                }
                             } else {
                                 // Dynamically find function pointer
                                 // (and cry at the performance impact)
