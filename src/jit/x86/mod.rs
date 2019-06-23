@@ -171,7 +171,7 @@ impl Compilable for MscsbFile {
                                             (Reg::RSP, (i as u64 * 8) + (-0x30i64 as u64), OperandSize::Qword)
                                         ).unwrap();
                                         writer.mov(
-                                            (Reg::RSP, (i as u64 * 8), OperandSize::Qword),
+                                            (Reg::RSP, (((arg_count - arg_reg_count) as u64 - (i as u64 + 1)) * 8), OperandSize::Qword),
                                             Reg::RAX
                                         ).unwrap();
                                     }
