@@ -11,6 +11,7 @@ mod asm_helper;
 use asm_helper::*;
 mod printf;
 use printf::msc_printf;
+mod syscalls;
 
 pub struct CompiledProgram {
     pub mem: Vec<JitMemory>,
@@ -51,8 +52,8 @@ impl Compilable for MscsbFile {
         let mut string_offsets: Vec<usize> = vec![];
         for string in self.strings.iter() {
             string_offsets.push(string_writer.get_ref().len());
-            string_writer.write(string.as_bytes()).ok()?;
-            string_writer.write(&[0u8]).ok()?;
+            string_writer.write(string.as_bytes()).unwrap();
+            string_writer.write(&[0u8]).unwrap();
         }
         let string_section = string_writer.into_inner();
         let string_offsets = string_offsets.iter().map(
@@ -72,7 +73,7 @@ impl Compilable for MscsbFile {
             let buffer = Cursor::new(Vec::new());
             let mut writer = InstructionWriter::new(buffer, Mode::Long);
             if let Some((arg_count, var_count)) = get_var_info(&self.scripts[script_index]) {
-                writer.setup_stack_frame(var_count as u32).ok()?;
+                writer.setup_stack_frame(var_count as u32).unwrap();
                 for i in 0..std::cmp::min(arg_count, 6) {
                     writer.mov(
                         (Reg::RBP, i as u64 * 4, OperandSize::Dword),
@@ -91,7 +92,7 @@ impl Compilable for MscsbFile {
                 }
                 for cmd in self.scripts[script_index].iter().skip(1) {
                     if ret_val_locations.contains(&(cmd.position + self.scripts[script_index].bounds.0)) {
-                        writer.push(Reg::RAX).ok()?;
+                        writer.push(Reg::RAX).unwrap();
                     }
                     let command_asm_pos = writer.get_inner_writer_ref().position();
                     command_locations.insert(&cmd.position, command_asm_pos);
@@ -108,6 +109,38 @@ impl Compilable for MscsbFile {
                                 Operand::Literal32(0)
                             ).unwrap();
                             jump_relocations.push((command_asm_pos, Mnemonic::JMP, loc - self.scripts[script_index].bounds.0));
+                        }
+                        Cmd::Sys { sys_num, arg_count } => {
+                            writer.mov(Reg::RDI, Reg::RSP).unwrap();
+                            writer.mov(Reg::RSI, arg_count as u32).unwrap();
+                            writer.mov(Reg::RCX, syscalls::SYSCALL_TABLE[sys_num as usize] as u64).unwrap();
+                            writer.push(Reg::R15).unwrap();
+                            writer.mov(Reg::R15, Reg::RSP).unwrap();
+                            writer.write2(
+                                Mnemonic::AND,
+                                Operand::Direct(Reg::R15),
+                                Operand::Literal8(0x8)
+                            ).unwrap();
+                            writer.write2(
+                                Mnemonic::SUB,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Direct(Reg::R15)
+                            ).unwrap();
+                            writer.call(Reg::RCX).unwrap();
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Direct(Reg::R15)
+                            ).unwrap();
+                            writer.pop(Reg::R15).unwrap();
+                            writer.write2(
+                                Mnemonic::ADD,
+                                Operand::Direct(Reg::RSP),
+                                Operand::Literal8(8 * arg_count)
+                            ).unwrap();
+                            if cmd.push_bit {
+                                writer.push(Reg::RAX).unwrap();
+                            }
                         }
                         Cmd::Push => {
                             if cmd.push_bit {
@@ -126,7 +159,7 @@ impl Compilable for MscsbFile {
                             }
                         }
                         Cmd::If { loc } | Cmd::IfNot { loc } => {
-                            writer.pop(Reg::RAX).ok()?;
+                            writer.pop(Reg::RAX).unwrap();
                             writer.write2(
                                 Mnemonic::CMP,
                                 Operand::Direct(Reg::RAX),
@@ -180,7 +213,7 @@ impl Compilable for MscsbFile {
                                 command_locations.insert(&cmd.position, command_asm_pos);
                                 call_relocs.push((script_index, command_asm_pos, i));
                                 writer.mov_rax_0().unwrap();
-                                writer.call(Reg::RAX).ok()?;
+                                writer.call(Reg::RAX).unwrap();
                                 if arg_count > 6 {
                                     writer.write2(
                                         Mnemonic::ADD,
@@ -196,12 +229,12 @@ impl Compilable for MscsbFile {
                         }
                         Cmd::PushShort { val } => {
                             if cmd.push_bit {
-                                writer.push(val as u32).ok()?;
+                                writer.push(val as u32).unwrap();
                             }
                         }
                         Cmd::PushInt { val } => {
                             if cmd.push_bit {
-                                writer.push(val).ok()?;
+                                writer.push(val).unwrap();
                             }
                         }
                         Cmd::IntToFloat { stack_pos } => {
@@ -244,24 +277,24 @@ impl Compilable for MscsbFile {
                                     Reg::EAX,
                                     (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
                                 ).unwrap();
-                                writer.push(Reg::RAX).ok()?;
+                                writer.push(Reg::RAX).unwrap();
                             } else {
                                 // Global variable
                                 writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
-                                writer.push(Reg::RAX).ok()?;
+                                writer.push(Reg::RAX).unwrap();
                             }
                         }
                         Cmd::SetVar { var_type, var_num } | Cmd::VarSetF { var_type, var_num } => {
                             if var_type == 0 {
                                 // Local var
-                                writer.pop(Reg::RAX).ok()?;
+                                writer.pop(Reg::RAX).unwrap();
                                 writer.mov(
                                     (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
                                     Reg::EAX
                                 ).unwrap();
                             } else {
                                 // Global var
-                                writer.pop(Reg::RCX).ok()?;
+                                writer.pop(Reg::RCX).unwrap();
                                 writer.set_global(global_vars.as_ptr(), Reg::ECX, var_num).unwrap();
                             }
                         }
@@ -350,7 +383,7 @@ impl Compilable for MscsbFile {
                         Cmd::AddVarBy { var_type, var_num } | Cmd::SubVarBy { var_type, var_num } |
                         Cmd::AndVarBy { var_type, var_num } | Cmd::OrVarBy {var_type, var_num} |
                         Cmd::XorVarBy { var_type, var_num } => {
-                            writer.pop(Reg::RCX).ok()?;
+                            writer.pop(Reg::RCX).unwrap();
                             let operation = match cmd.cmd {
                                 Cmd::AddVarBy { var_type: _, var_num: _ } => Mnemonic::ADD,
                                 Cmd::SubVarBy { var_type: _, var_num: _ } => Mnemonic::SUB,
@@ -363,7 +396,7 @@ impl Compilable for MscsbFile {
                                 writer.mov(
                                     Reg::ECX,
                                     (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
-                                ).ok()?;
+                                ).unwrap();
                                 writer.write2(
                                     operation,
                                     Operand::Direct(Reg::ECX),
@@ -372,7 +405,7 @@ impl Compilable for MscsbFile {
                                 writer.mov(
                                     (Reg::RBP, var_num as u64 * 4, OperandSize::Dword),
                                     Reg::ECX
-                                ).ok()?;
+                                ).unwrap();
                             } else {
                                 writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                                 writer.write2(
@@ -385,7 +418,7 @@ impl Compilable for MscsbFile {
                         }
                         Cmd::MultVarBy { var_type, var_num } | Cmd::DivVarBy { var_type, var_num } |
                         Cmd::ModVarBy { var_type, var_num } => {
-                            writer.pop(Reg::RCX).ok()?;
+                            writer.pop(Reg::RCX).unwrap();
                             let operation = match cmd.cmd {
                                 Cmd::MultVarBy { var_type: _, var_num: _ }
                                     => Mnemonic::IMUL,
@@ -398,7 +431,7 @@ impl Compilable for MscsbFile {
                                 writer.mov(
                                     Reg::EAX,
                                     (Reg::RBP, var_num as u64 * 4, OperandSize::Dword)
-                                ).ok()?;
+                                ).unwrap();
                                 writer.write1(
                                     operation,
                                     Operand::Direct(Reg::ECX),
@@ -409,7 +442,7 @@ impl Compilable for MscsbFile {
                                         Cmd::ModVarBy { var_type: _, var_num: _ } => Reg::EDX,
                                         _ => Reg::EAX
                                     },
-                                ).ok()?;
+                                ).unwrap();
                             } else {
                                 writer.get_global(global_vars.as_ptr(), Reg::EAX, var_num).unwrap();
                                 if let Mnemonic::IDIV = operation {
@@ -426,8 +459,8 @@ impl Compilable for MscsbFile {
                             }
                         }
                         Cmd::MultI | Cmd::DivI | Cmd::ModI => {
-                            writer.pop(Reg::RCX).ok()?;
-                            writer.pop(Reg::RAX).ok()?;
+                            writer.pop(Reg::RCX).unwrap();
+                            writer.pop(Reg::RAX).unwrap();
                             if cmd.push_bit {
                                 let op = match cmd.cmd {
                                     Cmd::MultI => Mnemonic::IMUL,
@@ -440,20 +473,20 @@ impl Compilable for MscsbFile {
                                 writer.write1(
                                     op,
                                     Operand::Direct(Reg::ECX)
-                                ).ok()?;
+                                ).unwrap();
                                 writer.push(
                                     if let Cmd::ModI = cmd.cmd {
                                         Reg::RDX
                                     } else {
                                         Reg::RAX
                                     }
-                                ).ok()?;
+                                ).unwrap();
                             }
                         }
                         Cmd::AddI | Cmd::SubI | Cmd::ShiftL | Cmd::ShiftR | Cmd::AndI | Cmd::OrI |
                         Cmd::XorI => {
-                            writer.pop(Reg::RCX).ok()?;
-                            writer.pop(Reg::RAX).ok()?;
+                            writer.pop(Reg::RCX).unwrap();
+                            writer.pop(Reg::RAX).unwrap();
                             if cmd.push_bit {
                                 writer.write2(
                                     match cmd.cmd {
@@ -467,15 +500,20 @@ impl Compilable for MscsbFile {
                                         _ => { unreachable!() }
                                     },
                                     Operand::Direct(Reg::EAX),
-                                    Operand::Direct(Reg::ECX)
-                                ).ok()?;
-                                writer.push(Reg::RAX).ok()?;
+                                    Operand::Direct(
+                                        match cmd.cmd {
+                                            Cmd::ShiftR | Cmd::ShiftL => { Reg::CL }
+                                            _ => { Reg::ECX }
+                                        }
+                                    )
+                                ).unwrap();
+                                writer.push(Reg::RAX).unwrap();
                             }
                         }
                         Cmd::Equals | Cmd::NotEquals | Cmd::LessThan | Cmd::LessOrEqual |
                         Cmd::Greater | Cmd::GreaterOrEqual => {
-                            writer.pop(Reg::RAX).ok()?;
-                            writer.pop(Reg::RCX).ok()?;
+                            writer.pop(Reg::RAX).unwrap();
+                            writer.pop(Reg::RCX).unwrap();
                             if cmd.push_bit {
                                 writer.write2(
                                     Mnemonic::XOR,
@@ -513,7 +551,7 @@ impl Compilable for MscsbFile {
                         Cmd::EqualsF | Cmd::NotEqualsF | Cmd::LessThanF | Cmd::LessOrEqualF |
                         Cmd::GreaterF | Cmd::GreaterOrEqualF => {
                             if cmd.push_bit {
-                                writer.copy_to_fpu_rev(2).ok()?;
+                                writer.copy_to_fpu_rev(2).unwrap();
                                 writer.mov(Reg::EDX, 1u32).unwrap();
                                 writer.fcompp().unwrap();
                                 writer.fstsw_ax().unwrap();
@@ -557,9 +595,9 @@ impl Compilable for MscsbFile {
                                         _ => { unreachable!() }
                                     },
                                     (Reg::RSP, OperandSize::Dword).into_op()
-                                ).ok()?;
+                                ).unwrap();
                             } else {
-                                writer.pop(Reg::RAX).ok()?;
+                                writer.pop(Reg::RAX).unwrap();
                             }
                         }
                         Cmd::NegF => {
@@ -573,7 +611,7 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         }
                         Cmd::Not => {
-                            writer.pop(Reg::RAX).ok()?;
+                            writer.pop(Reg::RAX).unwrap();
                             if cmd.push_bit {
                                 writer.write2(
                                     Mnemonic::XOR,
@@ -638,15 +676,15 @@ impl Compilable for MscsbFile {
                                 println!("WARNING: printf arg_count cannot be 0");
                                 continue;
                             }
-                            writer.mov(Reg::RSI, Reg::RSP).ok()?;
-                            writer.mov(Reg::RAX, (Reg::RSP, 8 * (arg_count as u64 - 1), OperandSize::Qword)).ok()?;
-                            writer.mov(Reg::RDX, arg_count as u64 - 1 ).ok()?;
-                            writer.mov(Reg::RDI, string_offsets.as_ptr() as u64).ok()?;
+                            writer.mov(Reg::RSI, Reg::RSP).unwrap();
+                            writer.mov(Reg::RAX, (Reg::RSP, 8 * (arg_count as u64 - 1), OperandSize::Qword)).unwrap();
+                            writer.mov(Reg::RDX, arg_count as u64 - 1 ).unwrap();
+                            writer.mov(Reg::RDI, string_offsets.as_ptr() as u64).unwrap();
                             writer.mov(
                                 Reg::RDI,
                                 (Reg::RDI, Reg::RAX, RegScale::Eight, OperandSize::Qword)
-                            ).ok()?;
-                            writer.mov(Reg::RCX, msc_printf as u64).ok()?;
+                            ).unwrap();
+                            writer.mov(Reg::RCX, msc_printf as u64).unwrap();
                             writer.push(Reg::R15).unwrap();
                             writer.mov(Reg::R15, Reg::RSP).unwrap();
                             writer.write2(
@@ -659,7 +697,7 @@ impl Compilable for MscsbFile {
                                 Operand::Direct(Reg::RSP),
                                 Operand::Direct(Reg::R15)
                             ).unwrap();
-                            writer.call(Reg::RCX).ok()?;
+                            writer.call(Reg::RCX).unwrap();
                             writer.write2(
                                 Mnemonic::ADD,
                                 Operand::Direct(Reg::RSP),
@@ -678,11 +716,11 @@ impl Compilable for MscsbFile {
                             }
                         }
                         Cmd::Return6 | Cmd::Return8 => {
-                            writer.pop(Reg::RAX).ok()?;
-                            writer.write_ret(var_count as u32).ok()?;
+                            writer.pop(Reg::RAX).unwrap();
+                            writer.write_ret(var_count as u32).unwrap();
                         }
                         Cmd::Return7 | Cmd::Return9 | Cmd::End => {
-                            writer.write_ret(var_count as u32).ok()?;
+                            writer.write_ret(var_count as u32).unwrap();
                         }
                         Cmd::Exit => {
                             writer.mov(Reg::EAX, 60u32).unwrap();
@@ -696,9 +734,6 @@ impl Compilable for MscsbFile {
                             ).unwrap();
                         }
                         Cmd::Nop => {}
-                        _ => {
-                            println!("{:?} not recognized", cmd);
-                        }
                     }
                     last_cmd_pushint = match cmd.cmd {
                         Cmd::PushInt { val } => {
@@ -712,7 +747,7 @@ impl Compilable for MscsbFile {
                         }
                     };
                 }
-                //writer.write_ret(var_count as u32).ok()?;
+                //writer.write_ret(var_count as u32).unwrap();
                 for relocation in jump_relocations {
                     writer.seek(SeekFrom::Start(relocation.0)).unwrap();
                     writer.write1(
@@ -731,7 +766,7 @@ impl Compilable for MscsbFile {
                     ).unwrap();
                 }
             } else {
-                writer.write0(Mnemonic::RET).ok()?;
+                writer.write0(Mnemonic::RET).unwrap();
             }
             let buffer = writer.get_inner_writer_ref().get_ref();
             println!("\n\nEmitted asm:");
