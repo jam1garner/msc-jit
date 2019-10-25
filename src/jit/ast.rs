@@ -53,17 +53,17 @@ fn binop_cmd_type(c: Cmd) -> Type {
 
 fn var_cmd_type(c: Cmd) -> Type {
     match c {
-        Cmd::IncI { var_type: _, var_num: _ } | Cmd::DecI { var_type: _, var_num: _ } |
-        Cmd::SetVar { var_type: _, var_num: _ } | Cmd::AddVarBy { var_type: _, var_num: _ } |
-        Cmd::SubVarBy { var_type: _, var_num: _ } | Cmd::MultVarBy { var_type: _, var_num: _ } |
-        Cmd::DivVarBy { var_type: _, var_num: _ } | Cmd::ModVarBy { var_type: _, var_num: _ } |
-        Cmd::AndVarBy { var_type: _, var_num: _ } | Cmd::OrVarBy { var_type: _, var_num: _ } |
-        Cmd::XorVarBy { var_type: _, var_num: _ }
+        Cmd::IncI { .. } | Cmd::DecI { .. } |
+        Cmd::SetVar { .. } | Cmd::AddVarBy { .. } |
+        Cmd::SubVarBy { .. } | Cmd::MultVarBy { .. } |
+        Cmd::DivVarBy { .. } | Cmd::ModVarBy { .. } |
+        Cmd::AndVarBy { .. } | Cmd::OrVarBy { .. } |
+        Cmd::XorVarBy { .. }
             => Type::Int,
-        Cmd::IncF { var_type: _, var_num: _ } | Cmd::DecF { var_type: _, var_num: _ } |
-        Cmd::VarSetF { var_type: _, var_num: _ } | Cmd::AddVarByF { var_type: _, var_num: _ } |
-        Cmd::SubVarByF { var_type: _, var_num: _ } | Cmd::MultVarByF { var_type: _, var_num: _ } |
-        Cmd::DivVarByF { var_type: _, var_num: _ }
+        Cmd::IncF { .. } | Cmd::DecF { .. } |
+        Cmd::VarSetF { .. } | Cmd::AddVarByF { .. } |
+        Cmd::SubVarByF { .. } | Cmd::MultVarByF { .. } |
+        Cmd::DivVarByF { .. }
             => Type::Float,
         _ => panic!("Cmd {:?} has no type", c)
     }
@@ -71,24 +71,24 @@ fn var_cmd_type(c: Cmd) -> Type {
 
 fn cmd_to_assignop(c: Cmd) -> AssignOp {
     match c {
-        Cmd::IncI { var_type: _, var_num: _ } => AssignOp::Add(Type::Int),
-        Cmd::DecI { var_type: _, var_num: _ } => AssignOp::Sub(Type::Int),
-        Cmd::SetVar { var_type: _, var_num: _ } => AssignOp::Set(Type::Int),
-        Cmd::AddVarBy { var_type: _, var_num: _ } => AssignOp::Add(Type::Int),
-        Cmd::SubVarBy { var_type: _, var_num: _ } => AssignOp::Sub(Type::Int),
-        Cmd::MultVarBy { var_type: _, var_num: _ } => AssignOp::Mult(Type::Int),
-        Cmd::DivVarBy { var_type: _, var_num: _ } => AssignOp::Div(Type::Int),
-        Cmd::ModVarBy { var_type: _, var_num: _ } => AssignOp::Mod,
-        Cmd::AndVarBy { var_type: _, var_num: _ } => AssignOp::And,
-        Cmd::OrVarBy { var_type: _, var_num: _ } => AssignOp::Or,
-        Cmd::XorVarBy { var_type: _, var_num: _ } => AssignOp::Xor,
-        Cmd::IncF { var_type: _, var_num: _ } => AssignOp::Add(Type::Float),
-        Cmd::DecF { var_type: _, var_num: _ } => AssignOp::Sub(Type::Int),
-        Cmd::VarSetF { var_type: _, var_num: _ } => AssignOp::Set(Type::Float),
-        Cmd::AddVarByF { var_type: _, var_num: _ } => AssignOp::Add(Type::Float),
-        Cmd::SubVarByF { var_type: _, var_num: _ } => AssignOp::Sub(Type::Float),
-        Cmd::MultVarByF { var_type: _, var_num: _ } => AssignOp::Mult(Type::Float),
-        Cmd::DivVarByF { var_type: _, var_num: _ } => AssignOp::Div(Type::Float),
+        Cmd::IncI { .. } => AssignOp::Add(Type::Int),
+        Cmd::DecI { .. } => AssignOp::Sub(Type::Int),
+        Cmd::SetVar { .. } => AssignOp::Set(Type::Int),
+        Cmd::AddVarBy { .. } => AssignOp::Add(Type::Int),
+        Cmd::SubVarBy { .. } => AssignOp::Sub(Type::Int),
+        Cmd::MultVarBy { .. } => AssignOp::Mult(Type::Int),
+        Cmd::DivVarBy { .. } => AssignOp::Div(Type::Int),
+        Cmd::ModVarBy { .. } => AssignOp::Mod,
+        Cmd::AndVarBy { .. } => AssignOp::And,
+        Cmd::OrVarBy { .. } => AssignOp::Or,
+        Cmd::XorVarBy { .. } => AssignOp::Xor,
+        Cmd::IncF { .. } => AssignOp::Add(Type::Float),
+        Cmd::DecF { .. } => AssignOp::Sub(Type::Int),
+        Cmd::VarSetF { .. } => AssignOp::Set(Type::Float),
+        Cmd::AddVarByF { .. } => AssignOp::Add(Type::Float),
+        Cmd::SubVarByF { .. } => AssignOp::Sub(Type::Float),
+        Cmd::MultVarByF { .. } => AssignOp::Mult(Type::Float),
+        Cmd::DivVarByF { .. } => AssignOp::Div(Type::Float),
         _ => panic!("Cmd {:?} has no type", c)
     }
 }

@@ -6,9 +6,9 @@ pub extern "C" fn crc32_for_byte(args_ptr: *const u64, argsc: u64) -> u32 {
     if argsc > 0 {
         let mut r = unsafe { *args_ptr } as u32;
         for _ in 0..8 {
-            r = (if r & 1 != 0 { 0 } else { 0xEDB88320 }) ^ r >> 1;
+            r = (if r & 1 != 0 { 0 } else { 0xEDB8_8320 }) ^ r >> 1;
         }
-        r ^ 0xFF000000
+        r ^ 0xFF00_0000
     } else {
         -1i32 as u32
     }

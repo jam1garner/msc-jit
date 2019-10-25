@@ -1,13 +1,13 @@
-use libc::{c_char, c_void};
+use libc::{c_char};
 use std::ffi::CString;
-use std::mem::transmute;
 
+/// Extremely unsafe, sneeze and you'll have code execution
 pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, argsc: u64) {
     let args = std::slice::from_raw_parts(args_ptr, argsc as usize);
     let len = libc::strlen(fmt);
     let mut fmt = fmt as *const u8;
     let mut arg_i = 0;
-    let end = fmt.offset(len as isize);
+    let end = fmt.add(len);
     while fmt < end {
         match *fmt as char {
             '%' => {
@@ -17,21 +17,15 @@ pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, ar
                     libc::putchar('%' as i32);
                 }
                 // Evaluate format specifier
-                loop {
+                while let 0x30..=0x39 = *fmt {
                     // While in pad length of format specifier
-                    match *fmt {
-                        0x30..=0x39 => { fmt = fmt.offset(1) }
-                        _ => { break }
-                    }
+                    fmt = fmt.offset(1);
                 }
                 // Parse decimal count
                 if *fmt as char == '.' {
                     fmt = fmt.offset(1);
-                    loop {
-                        match *fmt {
-                            0x30..=0x39 => { fmt = fmt.offset(1) }
-                            _ => { break }
-                        }
+                    while let 0x30..=0x39 = *fmt {
+                        fmt = fmt.offset(1);
                     }
                 }
                 match *fmt as char {
@@ -54,7 +48,7 @@ pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, ar
                         );
                         if let Ok(cstr) = CString::new(s) {
                             let val = *(&args[argsc as usize - (arg_i as usize + 1)] as *const u64 as *const f32);
-                            libc::printf(cstr.as_ptr(), val as f64);
+                            libc::printf(cstr.as_ptr(), f64::from(val));
                         }
                         arg_i += 1;
                     }
@@ -66,10 +60,9 @@ pub unsafe extern "C" fn msc_printf(fmt: *const c_char, args_ptr: *const u64, ar
                 continue;
             }
             _ => {
-                libc::putchar(*fmt as i32);
+                libc::putchar(i32::from(*fmt));
             }
         }
         fmt = fmt.offset(1);
     }
-    //libc::printf(fmt);
 }

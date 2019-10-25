@@ -5,14 +5,14 @@ mod jit;
 
 use jit::x86::*;
 use std::io::prelude::*;
-use std::io::{self, BufRead};
+//use std::io;
 
-fn gdb(address: u64) {
+fn gdb(_address: u64) {
     std::fs::File::create("/tmp/msc-jit-temp.txt").unwrap()
         .write_all("layout regs\nb src/jit/mod.rs:50\ncommands\nsi\nend\n".as_bytes()).unwrap();
     println!("sudo gdb -p {} -x /tmp/msc-jit-temp.txt", std::process::id());
-    let stdin = io::stdin();
-    stdin.lock().lines().next().unwrap().ok();
+    //let stdin = io::stdin();
+    //stdin.lock().lines().next().unwrap().ok();
     std::fs::remove_file("/tmp/msc-jit-temp.txt").ok();
 }
 

@@ -1,4 +1,6 @@
-use x86asm::{OperandSize, RegScale, InstructionEncodingError, InstructionWriter, Mnemonic, Mode, Operand, Reg};
+use x86asm::{OperandSize, RegScale, Operand, Reg};
+
+use Operand::*;
 
 pub trait IntoOperand {
     fn into_op(self) -> Operand;
@@ -6,59 +8,65 @@ pub trait IntoOperand {
 
 impl IntoOperand for u8 {
     fn into_op(self) -> Operand {
-        Operand::Literal8(self)
+        Literal8(self)
     }
 }
 
 impl IntoOperand for u16 {
     fn into_op(self) -> Operand {
-        Operand::Literal16(self)
+        Literal16(self)
     }
 }
 
 impl IntoOperand for u32 {
     fn into_op(self) -> Operand {
-        Operand::Literal32(self)
+        Literal32(self)
     }
 }
 
 impl IntoOperand for u64 {
     fn into_op(self) -> Operand {
-        Operand::Literal64(self)
+        Literal64(self)
     }
 }
 
 impl IntoOperand for Reg {
     fn into_op(self) -> Operand {
-        Operand::Direct(self)
+        Direct(self)
     }
 }
 
 impl IntoOperand for (Reg, OperandSize) {
     fn into_op(self) -> Operand {
-        Operand::Indirect(self.0, Some(self.1), None)
+        Indirect(self.0, Some(self.1), None)
     }
 }
 
 impl IntoOperand for (Reg, u64, OperandSize) {
     fn into_op(self) -> Operand {
         if self.1 == 0 {
-            Operand::Indirect(self.0, Some(self.2), None)
+            Indirect(self.0, Some(self.2), None)
         } else {
-            Operand::IndirectDisplaced(self.0, self.1, Some(self.2), None)
+            IndirectDisplaced(self.0, self.1, Some(self.2), None)
         }
+    }
+}
+
+impl IntoOperand for (Reg, i64, OperandSize) {
+    fn into_op(self) -> Operand {
+        IntoOperand::into_op((self.0, self.1 as u64, self.2))
     }
 }
 
 impl IntoOperand for (Reg, Reg, RegScale, OperandSize) {
     fn into_op(self) -> Operand {
-        Operand::IndirectScaledIndexed(self.0, self.1, self.2, Some(self.3), None)
+        IndirectScaledIndexed(self.0, self.1, self.2, Some(self.3), None)
     }
 }
 
 impl IntoOperand for (Reg, Reg, RegScale, u64, OperandSize) {
     fn into_op(self) -> Operand {
-        Operand::IndirectScaledIndexedDisplaced(self.0, self.1, self.2, self.3, Some(self.4), None)
+        IndirectScaledIndexedDisplaced(self.0, self.1, self.2, self.3, Some(self.4), None)
     }
 }
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::mem;
 pub mod x86;
-pub mod ast;
+//pub mod ast;
 
 extern {
     fn memset(s: *mut libc::c_void, c: u32, n: libc::size_t) -> *mut libc::c_void;
@@ -27,7 +27,7 @@ impl<'a> JitMemory {
 
             memset(_contents, 0xc3, size);  // for now, prepopulate with 'RET'
 
-            contents = mem::transmute(_contents);
+            contents = _contents as _;
             JitMemory { contents, _contents, size, locked: false }
         }
     }
